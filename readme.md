@@ -25,19 +25,19 @@ To run the simulations, the file `main.py` contains all necessary elements. The 
 For the strong magnetic field:
 
 ```bash
-python main.py --lr 0.001 --field strong --layers 512 --n_models 5
+python main.py --lr 0.01 --field strong --layers 512 --n_models 5 --scale 1
 ```
 
 For the weak magnetic field:
 
 ```bash
-python main.py --lr 0.001 --field weak --layers 512 --n_models 5
+python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1
 ```
 
 For the linear simulation (without field):
 
 ```bash
-python main.py --lr 0.001 --field linear --layers 512 --n_models 5
+python main.py --lr 0.01 --field linear --layers 512 --n_models 5 --scale 1
 ```
 
 Note: Simulations are saved under the `simulations` folder, with the timestamp corresponding with the start of the simulation. There are three types of files:

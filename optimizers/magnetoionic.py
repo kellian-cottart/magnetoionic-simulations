@@ -6,11 +6,12 @@ from torch.nn.utils import parameters_to_vector, vector_to_parameters
 class Magnetoionic(torch.optim.Optimizer):
     """ Magnetoionic Optimizer made for simulating magnetic fields in magnetoinic devices
 
-    Args: 
+    Args:
         params (iterable): iterable of parameters to optimize or dicts defining
             parameter groups
         lr (float, optional): learning rate
         field (str, optional): type of magnetic field applied, either "strong", "weak" or "linear"
+        scale (float, optional): scale of the functions f_minus and f_plus
         eps (float, optional): term added to the denominator to improve numerical stability
     """
 
@@ -18,6 +19,7 @@ class Magnetoionic(torch.optim.Optimizer):
                  params,
                  lr=1e-3,
                  field="weak",
+                 scale=1,
                  eps=1e-8):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -25,22 +27,24 @@ class Magnetoionic(torch.optim.Optimizer):
             raise ValueError("Invalid epsilon value: {}".format(eps))
 
         defaults = dict(lr=lr,
+                        scale=scale,
                         eps=eps)
         super(Magnetoionic, self).__init__(params, defaults)
 
-        # Depending on the field applied, we have different polynomials
+        # Depending on the field applied, we have different functions
+        # Functions are rescale according to (2f(x) - 1)*scale
         if field == "strong":
-            self.f_minus = lambda x: -100 + 200*torch.exp(-x/116)
-            self.f_inverse_minus = lambda y: -116*torch.log((y+100)/200)
+            self.f_minus = lambda x: (-2*(1/27)*x + 1)*scale
+            self.f_inverse_minus = lambda y: -(y/scale - 1)/(2*(1/27))
 
-            self.f_plus = lambda x: 100 - 200*torch.exp(-x/80)
-            self.f_inverse_plus = lambda y: -80*torch.log((100-y)/200)
+            self.f_plus = lambda x: (1 - 2*torch.exp(-x/11))*scale
+            self.f_inverse_plus = lambda y: -11 * torch.log((1-y/scale)/2)
         elif field == "weak":
-            self.f_minus = lambda x: -100 + 200*torch.exp(-x/50)
-            self.f_inverse_minus = lambda y: -50*torch.log((y+100)/200)
+            self.f_minus = lambda x: (-1 + 2*torch.exp(-x/9))*scale
+            self.f_inverse_minus = lambda y: -9 * torch.log((y/scale + 1)/2)
 
-            self.f_plus = lambda x: 100 - 200*torch.exp(-x/131)
-            self.f_inverse_plus = lambda y: -131*torch.log((100-y)/200)
+            self.f_plus = lambda x: (1 - 2*torch.exp(-x/18))*scale
+            self.f_inverse_plus = lambda y: -18 * torch.log((1-y/scale)/2)
         elif field == "linear":
             self.f_minus = lambda x: -x
             self.f_inverse_minus = lambda y: -y
@@ -78,6 +82,7 @@ class Magnetoionic(torch.optim.Optimizer):
                 grad = p.grad.data
                 state = self.state[p]
                 lr = group['lr']
+                scale = group['scale']
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
@@ -88,6 +93,7 @@ class Magnetoionic(torch.optim.Optimizer):
                 # Compute the value of the polynom at the new position to get the new weights w_t = x_{t-1} + lr * grad
                 w_t = torch.where(grad >= 0, self.f_plus(x - lr*torch.abs(grad)),
                                   self.f_minus(x - lr*torch.abs(grad)))
+                w_t = torch.clamp(w_t, -scale, scale)
                 # Update the parameters
                 p.data = w_t
         return loss

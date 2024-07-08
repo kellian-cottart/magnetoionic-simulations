@@ -23,6 +23,8 @@ parser.add_argument('--field', type=str, default='strong',
                     help='Strength of the magnetic field')
 parser.add_argument('--layers', type=int, nargs='+',
                     default=[512], help='Number of neurons in each hidden layer')
+parser.add_argument('--scale', type=float, default=1,
+                    help='Scale of the functions f_minus and f_plus')
 parser.add_argument('--n_models', type=int, default=5,
                     help='Number of models to train')
 
@@ -36,6 +38,7 @@ BATCH_SIZE = args.batch_size  # Batch size for the training and testing
 EPOCHS = args.epochs  # Number of epochs for the training
 LR = args.lr  # Learning rate for the optimizer
 FIELD = args.field  # Strength of the magnetic field
+SCALE = args.scale  # Scale of the functions f_minus and f_plus
 TASK = "MNIST"  # Task to perform
 LAYERS = args.layers  # Number of neurons in each hidden layer
 LOSS = torch.nn.CrossEntropyLoss()  # Loss function
@@ -103,10 +106,11 @@ if __name__ == "__main__":
             std=0.01,
             dropout=False,
             normalization="batchnorm",
+            running_stats=True,
             device=DEVICE
         )
         # OPTIMIZER
-        optim = Magnetoionic(dnn.parameters(), lr=LR, field=FIELD)
+        optim = Magnetoionic(dnn.parameters(), lr=LR, field=FIELD, scale=SCALE)
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
         l, acc = training(DEVICE, BATCH_SIZE, LOSS, train_mnist,

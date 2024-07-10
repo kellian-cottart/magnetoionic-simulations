@@ -25,6 +25,11 @@ class Magnetoionic(torch.optim.Optimizer):
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
             raise ValueError("Invalid epsilon value: {}".format(eps))
+        if field not in ["strong", "weak", "linear"]:
+            raise ValueError(
+                "Invalid field type: {}".format(field))
+        if not 0.0 <= scale:
+            raise ValueError("Invalid scale value: {}".format(scale))
 
         defaults = dict(lr=lr,
                         scale=scale,
@@ -40,8 +45,9 @@ class Magnetoionic(torch.optim.Optimizer):
             self.f_plus = lambda x: (1 - 2*torch.exp(-x/11))*scale
             self.f_inverse_plus = lambda y: -11 * torch.log((1-y/scale)/2)
         elif field == "weak":
-            self.f_minus = lambda x: (-1 + 2*torch.exp(-x/9))*scale
-            self.f_inverse_minus = lambda y: -9 * torch.log((y/scale + 1)/2)
+            self.f_minus = lambda x: (2.16*torch.exp(-x/11)-1.16)*scale
+            self.f_inverse_minus = lambda y: - \
+                11 * torch.log((1.16+y/scale)/2.16)
 
             self.f_plus = lambda x: (1 - 2*torch.exp(-x/18))*scale
             self.f_inverse_plus = lambda y: -18 * torch.log((1-y/scale)/2)
@@ -51,14 +57,6 @@ class Magnetoionic(torch.optim.Optimizer):
 
             self.f_plus = lambda x: x
             self.f_inverse_plus = lambda y: y
-
-        # import matplotlib.pyplot as plt
-        # x = torch.linspace(-200, 200, 1000).cpu()
-        # plt.plot(x, self.f_minus(x).cpu(), label="f_minus")
-        # plt.plot(x, self.f_plus(x).cpu(), label="f_plus")
-        # plt.legend()
-        # plt.show()
-        # exit()
 
     def __setstate__(self, state):
         super(Magnetoionic, self).__setstate__(state)

@@ -19,14 +19,18 @@ parser.add_argument('--epochs', type=int, default=20,
                     help='Number of epochs for the training')
 parser.add_argument('--lr', type=float, default=0.001,
                     help='Learning rate for the optimizer')
-parser.add_argument('--field', type=str, default='strong',
-                    help='Strength of the magnetic field')
+parser.add_argument('--field', type=str, default='strong', nargs='*',
+                    help='Strength of the magnetic field (strong, weak or linear), can be strong weak to switch)')
 parser.add_argument('--layers', type=int, nargs='+',
                     default=[512], help='Number of neurons in each hidden layer')
 parser.add_argument('--scale', type=float, default=1,
                     help='Scale of the functions f_minus and f_plus')
 parser.add_argument('--n_models', type=int, default=5,
                     help='Number of models to train')
+parser.add_argument('--task', type=str, default='MNIST',
+                    help='Task to perform (MNIST or Fashion)')
+parser.add_argument('--time_switch', type=int, default=2,
+                    help='Fraction of the epochs to switch the magnetic field (2 is half of the epochs)')
 
 args = parser.parse_args()
 
@@ -38,16 +42,21 @@ BATCH_SIZE = args.batch_size  # Batch size for the training and testing
 EPOCHS = args.epochs  # Number of epochs for the training
 LR = args.lr  # Learning rate for the optimizer
 FIELD = args.field  # Strength of the magnetic field
+DIVISOR = 1  # Divisor for the learning rate
 SCALE = args.scale  # Scale of the functions f_minus and f_plus
-TASK = "MNIST"  # Task to perform
+# Fraction of the epochs to switch the magnetic field
+TIME_SWITCH = args.time_switch
+TASK = args.task  # Task to perform (MNIST or Fashion)
 LAYERS = args.layers  # Number of neurons in each hidden layer
 LOSS = torch.nn.CrossEntropyLoss()  # Loss function
 FOLDER = "simulations"  # Folder to save the simulations
 
 
-def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, optim, pbar):
+def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
     accuracies = torch.zeros(epochs)
     for epoch in pbar:
+        if switch is not None and epoch == epochs // time_switch:
+            optim.set_field(switch, SCALE)
         # TRAINING WITH BATCHES
         num_batches = len(train_mnist) // BATCH_SIZE + 1
         dnn.train()
@@ -63,26 +72,36 @@ def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, opt
             l.backward()
             optim.step()
         # TEST WITH BATCHES
-        dnn.eval()
-        num_batches = len(test_mnist) // BATCH_SIZE + 1
-        acc = 0
-        for batch in range(num_batches):
-            start = batch * BATCH_SIZE
-            end = start + BATCH_SIZE
-            x, y = test_mnist[start:end]
-            x = x.to(DEVICE)
-            y = y.to(DEVICE)
-            yhat = dnn(x)
-            acc += (yhat.argmax(dim=1) == y).sum().item()
-        acc /= len(test_mnist)
-        accuracies[epoch] = acc
+        acc = evaluation(DEVICE, BATCH_SIZE, test_mnist,
+                         dnn, accuracies, epoch)
         pbar.set_description(
             f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f}")
     return l, accuracies
 
 
+def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
+    dnn.eval()
+    num_batches = len(test_mnist) // BATCH_SIZE + 1
+    acc = 0
+    for batch in range(num_batches):
+        start = batch * BATCH_SIZE
+        end = start + BATCH_SIZE
+        x, y = test_mnist[start:end]
+        x = x.to(DEVICE)
+        y = y.to(DEVICE)
+        yhat = dnn(x)
+        acc += (yhat.argmax(dim=1) == y).sum().item()
+    acc /= len(test_mnist)
+    accuracies[epoch] = acc
+    return acc
+
+
 if __name__ == "__main__":
-    simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}"
+    if isinstance(FIELD, list):
+        simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
+            "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}"
+    else:
+        simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-{FIELD}-{LR}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -110,11 +129,13 @@ if __name__ == "__main__":
             device=DEVICE
         )
         # OPTIMIZER
-        optim = Magnetoionic(dnn.parameters(), lr=LR, field=FIELD, scale=SCALE)
+        field = FIELD if isinstance(FIELD, str) else FIELD[0]
+        switch = None if isinstance(FIELD, str) else FIELD[1]
+        optim = Magnetoionic(dnn.parameters(), lr=LR, field=field, scale=SCALE)
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
         l, acc = training(DEVICE, BATCH_SIZE, LOSS, train_mnist,
-                          test_mnist, dnn, EPOCHS, optim, pbar)
+                          test_mnist, dnn, EPOCHS, optim, pbar, switch=switch, time_switch=TIME_SWITCH)
         print(f"Accuracy: {acc[-1]*100: .2f} %, Loss: {l.item(): .4f}")
         # SAVE THE SIMULATION
         # Save the simulation parameters in a dict
@@ -134,7 +155,6 @@ if __name__ == "__main__":
             "loss": l.item(),
             "accuracy": acc[-1].item()*100,
         }
-
         # Save the simulation parameters in a json file
         filename = f"{simulation_id}-{i}.json"
         os.makedirs(folder_path, exist_ok=True)

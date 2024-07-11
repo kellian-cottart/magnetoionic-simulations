@@ -22,22 +22,46 @@ conda env create -f environment.yml
 
 To run the simulations, the file `main.py` contains all necessary elements. The different field simulations can be obtained by running the following commands.
 
-For the strong magnetic field:
+Simulations on MNIST:
+
+- Weak and Strong:
 
 ```bash
-python main.py --lr 0.01 --field strong --layers 512 --n_models 5 --scale 1
+python main.py --lr 0.1 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.1 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.1 --field linear --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.01 --field linear --layers 512 --n_models 5  --scale 1 --task MNIST &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.001 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.001 --field linear --layers 512 --n_models 5  --scale 1 --task MNIS
 ```
 
-For the weak magnetic field:
+- Weak $\to$ Strong and Strong $\to$ Weak, timing 1/2:
 
 ```bash
-python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1
+python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2 && python main.py --lr 0.01 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2 && python main.py --lr 0.001 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2 && python main.py --lr 0.1 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2 && python main.py --lr 0.01 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2 && python main.py --lr 0.001 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 2
 ```
 
-For the linear simulation (without field):
+- Weak $\to$ Strong and Strong $\to$ Weak, timing 1/4:
 
 ```bash
-python main.py --lr 0.01 --field linear --layers 512 --n_models 5 --scale 1
+python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.01 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.001 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.1 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.01 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.001 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4
+```
+
+
+
+Simulations on FashionMNIST:
+
+- Weak and Strong:
+
+```bash
+python main.py --lr 0.1 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.1 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.1 --field linear --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.01 --field linear --layers 512 --n_models 5  --scale 1 --task Fashion &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.001 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.001 --field linear --layers 512 --n_models 5  --scale 1 --task Fashio
+```
+
+- Weak $\to$ Strong and Strong $\to$ Weak, timing 1/2:
+
+```bash
+python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 2 && python main.py --lr 0.01 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 2 && python main.py --lr 0.001 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 2 && python main.py --lr 0.1 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 2 && python main.py --lr 0.01 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 2 && python main.py --lr 0.001 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 
+```
+
+- Weak $\to$ Strong and Strong $\to$ Weak, timing 1/4:
+
+```bash
+python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4 && python main.py --lr 0.01 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4 && python main.py --lr 0.001 --field weak strong --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4 && python main.py --lr 0.1 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4 && python main.py --lr 0.01 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4 && python main.py --lr 0.001 --field strong weak --layers 512 --n_models 5  --scale 1 --task Fashion --time_switch 4
 ```
 
 Note: Simulations are saved under the `simulations` folder, with the timestamp corresponding with the start of the simulation. There are three types of files:

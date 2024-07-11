@@ -30,7 +30,7 @@ class Magnetoionic(torch.optim.Optimizer):
                 "Invalid field type: {}".format(field))
         if not 0.0 <= scale:
             raise ValueError("Invalid scale value: {}".format(scale))
-
+        self.set_field(field, scale)
         defaults = dict(lr=lr,
                         scale=scale,
                         eps=eps)
@@ -38,6 +38,13 @@ class Magnetoionic(torch.optim.Optimizer):
 
         # Depending on the field applied, we have different functions
         # Functions are rescale according to (2f(x) - 1)*scale
+
+    def __setstate__(self, state):
+        super(Magnetoionic, self).__setstate__(state)
+        for group in self.param_groups:
+            group.setdefault('amsgrad', False)
+
+    def set_field(self, field, scale):
         if field == "strong":
             self.f_minus = lambda x: (-2*(1/27)*x + 1)*scale
             self.f_inverse_minus = lambda y: -(y/scale - 1)/(2*(1/27))
@@ -57,11 +64,6 @@ class Magnetoionic(torch.optim.Optimizer):
 
             self.f_plus = lambda x: x
             self.f_inverse_plus = lambda y: y
-
-    def __setstate__(self, state):
-        super(Magnetoionic, self).__setstate__(state)
-        for group in self.param_groups:
-            group.setdefault('amsgrad', False)
 
     def step(self, closure=None):
         """Performs a single optimization step.
@@ -86,10 +88,12 @@ class Magnetoionic(torch.optim.Optimizer):
                     state['step'] = 0
                 state['step'] += 1
                 # Compute x = f^-1(w), the previous x of the old weights
-                x = torch.where(grad >= 0, self.f_inverse_plus(
-                    p.data), self.f_inverse_minus(p.data))
+                x = torch.where(grad >= 0,
+                                self.f_inverse_plus(p.data),
+                                self.f_inverse_minus(p.data))
                 # Compute the value of the polynom at the new position to get the new weights w_t = x_{t-1} + lr * grad
-                w_t = torch.where(grad >= 0, self.f_plus(x - lr*torch.abs(grad)),
+                w_t = torch.where(grad >= 0,
+                                  self.f_plus(x - lr*torch.abs(grad)),
                                   self.f_minus(x - lr*torch.abs(grad)))
                 w_t = torch.clamp(w_t, -scale, scale)
                 # Update the parameters

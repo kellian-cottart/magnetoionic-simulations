@@ -27,7 +27,7 @@ Simulations on MNIST:
 - Weak and Strong:
 
 ```bash
-python main.py --lr 0.1 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.1 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.1 --field linear --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.01 --field linear --layers 512 --n_models 5  --scale 1 --task MNIST &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.001 --field strong --layers 512 --n_models 5  --scale 1 --task MNIST && python main.py --lr 0.001 --field linear --layers 512 --n_models 5  --scale 1 --task MNIS
+python main.py --lr 0.1 --field weak --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.1 --field strong --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.1 --field linear --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.01 --field weak --layers 512 --n_models 10  --scale 1 --task MNIST &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.01 --field linear --layers 512 --n_models 10  --scale 1 --task MNIST &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.001 --field strong --layers 512 --n_models 10  --scale 1 --task MNIST && python main.py --lr 0.001 --field linear --layers 512 --n_models 10  --scale 1 --task MNIST
 ```
 
 - Weak $\to$ Strong and Strong $\to$ Weak, timing 1/2:
@@ -42,14 +42,12 @@ python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1
 python main.py --lr 0.1 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.01 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.001 --field weak strong --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.1 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.01 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4 && python main.py --lr 0.001 --field strong weak --layers 512 --n_models 5  --scale 1 --task MNIST --time_switch 4
 ```
 
-
-
 Simulations on FashionMNIST:
 
 - Weak and Strong:
 
 ```bash
-python main.py --lr 0.1 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.1 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.1 --field linear --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.01 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.01 --field linear --layers 512 --n_models 5  --scale 1 --task Fashion &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.001 --field strong --layers 512 --n_models 5  --scale 1 --task Fashion && python main.py --lr 0.001 --field linear --layers 512 --n_models 5  --scale 1 --task Fashio
+python main.py --lr 0.1 --field weak --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.1 --field strong --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.1 --field linear --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.01 --field weak --layers 512 --n_models 10  --scale 1 --task Fashion &&  python main.py --lr 0.01 --field strong --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.01 --field linear --layers 512 --n_models 10  --scale 1 --task Fashion &&  python main.py --lr 0.001 --field weak --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.001 --field strong --layers 512 --n_models 10  --scale 1 --task Fashion && python main.py --lr 0.001 --field linear --layers 512 --n_models 10 --scale 1 --task Fashio
 ```
 
 - Weak $\to$ Strong and Strong $\to$ Weak, timing 1/2:

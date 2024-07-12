@@ -29,7 +29,7 @@ parser.add_argument('--n_models', type=int, default=5,
                     help='Number of models to train')
 parser.add_argument('--task', type=str, default='MNIST',
                     help='Task to perform (MNIST or Fashion)')
-parser.add_argument('--time_switch', type=int, default=2,
+parser.add_argument('--time_switch', type=int, default=None,
                     help='Fraction of the epochs to switch the magnetic field (2 is half of the epochs)')
 
 args = parser.parse_args()
@@ -97,11 +97,8 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 
 
 if __name__ == "__main__":
-    if isinstance(FIELD, list):
-        simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
-            "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}"
-    else:
-        simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-{FIELD}-{LR}"
+    simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
+        "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -129,8 +126,8 @@ if __name__ == "__main__":
             device=DEVICE
         )
         # OPTIMIZER
-        field = FIELD if isinstance(FIELD, str) else FIELD[0]
-        switch = None if isinstance(FIELD, str) else FIELD[1]
+        field = FIELD[0]
+        switch = None if len(FIELD) == 1 else FIELD[1]
         optim = Magnetoionic(dnn.parameters(), lr=LR, field=field, scale=SCALE)
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING

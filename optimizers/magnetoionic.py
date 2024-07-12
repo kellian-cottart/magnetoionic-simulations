@@ -155,26 +155,26 @@ class Magnetoionic(torch.optim.Optimizer):
                     x2 = self.f_inv(w2)
                     # update w1 only when the gradient is negative
                     w1 = torch.where(grad < 0,
-                                     self.f(x1 - lr*torch.abs(grad)),
+                                     self.f(x1 + lr*torch.abs(grad)),
                                      w1)
                     # update w2 only when the gradient is positive
                     w2 = torch.where(grad >= 0,
-                                     self.f(x2 - lr*torch.abs(grad)),
+                                     self.f(x2 + lr*torch.abs(grad)),
                                      w2)
                     # get indices from w1 where w1 is inferior to -scale
-                    idx = torch.where(w1 < -scale)
+                    idx = w1 < -scale
                     temp = w2[idx]
-                    w2[idx] = torch.ones_like(temp) * scale
-                    w1[idx] += (temp - scale)
-                    # same thing for w2
-                    idx = torch.where(w2 < -scale)
-                    temp = w1[idx]
-                    w1[idx] = torch.ones_like(temp) * scale
-                    w2[idx] -= (temp - scale)
-                    # update the state
-                    self.state[p][f'w1_{i}'] = w1
-                    self.state[p][f'w2_{i}'] = w2
+                    w2[idx] = scale
+                    w1[idx] = w1[idx] + scale - temp
 
-                    w_t = w1 - w2
+                    idx = w2 < -scale
+                    temp = w1[idx]
+                    w1[idx] = scale
+                    w2[idx] = w2[idx] + scale - temp
+
+                    # update the state
+                    state[f'w1_{i}'] = w1
+                    state[f'w2_{i}'] = w2
+                    w_t = w2-w1
                 p.data = w_t
         return loss

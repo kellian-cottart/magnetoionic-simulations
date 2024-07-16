@@ -103,7 +103,6 @@ class Magnetoionic(torch.optim.Optimizer):
             self.f = lambda x: 2*scale * f_weak_minus(x) - scale
             self.f_inv = lambda y: f_weak_inverse_minus(
                 (y + scale)/(2*scale))
-
         self.field = field
 
     def step(self, closure=None):
@@ -129,13 +128,13 @@ class Magnetoionic(torch.optim.Optimizer):
                 if len(state) == 0:
                     state['step'] = 0
                 state['step'] += 1
+                init = 0.01
 
                 if "double" in field and state['step'] == 1:
                     state[f'w1_{i}'] = torch.ones_like(
-                        p.data)
+                        p.data) - init
                     state[f'w2_{i}'] = torch.ones_like(
-                        p.data) - torch.distributions.Uniform(0, 0.02).sample(p.data.shape).to(p.data.device)
-
+                        p.data) - init - torch.distributions.Uniform(-init, init).sample(p.data.shape).to(p.data.device)
                 # When we do simple, we have only one device so we project the current weight on the functions depending on the sign of the gradient
                 if "simple" in self.field:
                     # Compute x = f^-1(w), the previous x of the old weights
@@ -151,28 +150,30 @@ class Magnetoionic(torch.optim.Optimizer):
                 elif "double" in self.field:
                     w1 = state[f'w1_{i}']
                     w2 = state[f'w2_{i}']
+                    # Retrieve the number of pulses associated with the current weight state
                     x1 = self.f_inv(w1)
                     x2 = self.f_inv(w2)
-                    # update w1 only when the gradient is negative
+                    # Compute the new value of the weights given a pulse set as the gradient
+                    f1 = self.f(x1 + lr*torch.abs(grad))
+                    f2 = self.f(x2 + lr*torch.abs(grad))
+                    # Update w1 only when the gradient is negative
                     w1 = torch.where(grad < 0,
-                                     self.f(x1 + lr*torch.abs(grad)),
+                                     f1,
                                      w1)
-                    # update w2 only when the gradient is positive
+                    # Ipdate w2 only when the gradient is positive
                     w2 = torch.where(grad >= 0,
-                                     self.f(x2 + lr*torch.abs(grad)),
+                                     f2,
                                      w2)
-                    # get indices from w1 where w1 is inferior to -scale
+                    # Here, we don't clamp, as we work with difference, we can simply reset the distance
                     idx = w1 < -scale
                     temp = w2[idx]
                     w2[idx] = scale
                     w1[idx] = w1[idx] + scale - temp
-
                     idx = w2 < -scale
                     temp = w1[idx]
                     w1[idx] = scale
                     w2[idx] = w2[idx] + scale - temp
-
-                    # update the state
+                    # Update the state
                     state[f'w1_{i}'] = w1
                     state[f'w2_{i}'] = w2
                     w_t = w2-w1

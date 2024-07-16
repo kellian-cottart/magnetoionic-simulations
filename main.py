@@ -98,7 +98,7 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
-        "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}"
+        "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):

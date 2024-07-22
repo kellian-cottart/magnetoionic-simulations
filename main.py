@@ -6,7 +6,7 @@ import tqdm
 import json
 import datetime
 import argparse
-import argparse
+from torch.nn.utils import parameters_to_vector, vector_to_parameters
 
 # Arguments
 parser = argparse.ArgumentParser(
@@ -31,6 +31,10 @@ parser.add_argument('--task', type=str, default='MNIST',
                     help='Task to perform (MNIST or Fashion)')
 parser.add_argument('--time_switch', type=int, default=None,
                     help='Fraction of the epochs to switch the magnetic field (2 is half of the epochs)')
+parser.add_argument('--noise', type=float, default=0.0,
+                    help='Gaussian noise standard deviation to add to the gradients')
+parser.add_argument('--init', type=float, default=0.01,
+                    help='Standard deviation for the initialization of the weights')
 
 args = parser.parse_args()
 
@@ -38,12 +42,14 @@ NUMBER_MODELS = args.n_models  # Number of models to train
 PADDING = 2  # Padding for the MNIST dataset - N pixels on each side of the image
 DEVICE = 'cuda:0'  # Device to use for the simulation (GPU or CPU)
 SEED = args.seed  # Seed for the random number generator
+INIT = args.init  # Standard deviation for the initialization of the weights
 BATCH_SIZE = args.batch_size  # Batch size for the training and testing
 EPOCHS = args.epochs  # Number of epochs for the training
 LR = args.lr  # Learning rate for the optimizer
 FIELD = args.field  # Strength of the magnetic field
 DIVISOR = 1  # Divisor for the learning rate
 SCALE = args.scale  # Scale of the functions f_minus and f_plus
+NOISE = args.noise  # Gaussian noise standard deviation to add to the gradients
 # Fraction of the epochs to switch the magnetic field
 TIME_SWITCH = args.time_switch
 TASK = args.task  # Task to perform (MNIST or Fashion)
@@ -54,6 +60,7 @@ FOLDER = "simulations"  # Folder to save the simulations
 
 def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
     accuracies = torch.zeros(epochs)
+    gradients = torch.zeros(epochs)
     for epoch in pbar:
         if switch is not None and epoch == epochs // time_switch:
             optim.set_field(switch, SCALE)
@@ -76,7 +83,11 @@ def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, opt
                          dnn, accuracies, epoch)
         pbar.set_description(
             f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f}")
-    return l, accuracies
+        # Compute the mean absolute value of the gradients
+        gradients[epoch] = LR*parameters_to_vector(
+            [p.grad for p in dnn.parameters()]).abs().mean().item()
+        print(f"Mean gradient: {gradients[epoch]: .4f}")
+    return l, accuracies, gradients
 
 
 def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
@@ -98,7 +109,8 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
-        "-".join(FIELD) + f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}"
+        "-".join(FIELD) + \
+        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -119,7 +131,7 @@ if __name__ == "__main__":
             layers=[size_in] + LAYERS + [target_size],
             activation="relu",
             init="uniform",
-            std=0.01,
+            std=INIT,
             dropout=False,
             normalization="batchnorm",
             running_stats=True,
@@ -128,11 +140,12 @@ if __name__ == "__main__":
         # OPTIMIZER
         field = FIELD[0]
         switch = None if len(FIELD) == 1 else FIELD[1]
-        optim = Magnetoionic(dnn.parameters(), lr=LR, field=field, scale=SCALE)
+        optim = Magnetoionic(dnn.parameters(), lr=LR,
+                             field=field, scale=SCALE, noise=NOISE, init=INIT)
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
-        l, acc = training(DEVICE, BATCH_SIZE, LOSS, train_mnist,
-                          test_mnist, dnn, EPOCHS, optim, pbar, switch=switch, time_switch=TIME_SWITCH)
+        l, acc, grad = training(DEVICE, BATCH_SIZE, LOSS, train_mnist,
+                                test_mnist, dnn, EPOCHS, optim, pbar, switch=switch, time_switch=TIME_SWITCH)
         print(f"Accuracy: {acc[-1]*100: .2f} %, Loss: {l.item(): .4f}")
         # SAVE THE SIMULATION
         # Save the simulation parameters in a dict
@@ -143,10 +156,14 @@ if __name__ == "__main__":
             "batch_size": BATCH_SIZE,
             "layers": LAYERS,
             "epochs": EPOCHS,
+            "noise": NOISE,
             "optimizer": optim.__class__.__name__,
             "optimizer_parameters": {
                 "lr": LR,
-                "field": FIELD
+                "field": FIELD,
+                "scale": SCALE,
+                "noise": NOISE,
+                "init": INIT
             },
             "criterion": LOSS.__class__.__name__,
             "loss": l.item(),
@@ -163,4 +180,7 @@ if __name__ == "__main__":
         # Save the accuracies
         acc_filename = f"{simulation_id}-{i}-accuracies.pth"
         torch.save(acc, os.path.join(folder_path, acc_filename))
+        # Save the gradients
+        grad_filename = f"{simulation_id}-{i}-gradients.pth"
+        torch.save(grad, os.path.join(folder_path, grad_filename))
     print(f"Simulation saved in {folder_path}")

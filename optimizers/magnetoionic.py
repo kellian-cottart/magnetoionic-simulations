@@ -21,8 +21,8 @@ class Magnetoionic(torch.optim.Optimizer):
                  lr=1e-3,
                  field="weak",
                  scale=1,
-                 noise=0,
                  init=0.01,
+                 noise=0.0,
                  eps=1e-8):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -35,8 +35,8 @@ class Magnetoionic(torch.optim.Optimizer):
                         scale=scale,
                         eps=eps,
                         field=field,
-                        noise=noise,
-                        init=init)
+                        init=init,
+                        noise=noise,)
         super(Magnetoionic, self).__init__(params, defaults)
 
     def set_field(self, field, scale):
@@ -113,28 +113,58 @@ class Magnetoionic(torch.optim.Optimizer):
             for i, p in enumerate(group['params']):
                 if p.grad is None:
                     continue
-                if group['noise'] > 0:
-                    p.grad.data = p.grad.data.add(torch.empty_like(
-                        p.grad.data).normal_(0, group['noise']))
-
                 grad = p.grad.data
                 state = self.state[p]
                 lr = group['lr']
                 scale = group['scale']
                 field = group['field']
                 init = group['init']
+                noise = group['noise']
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
                 state['step'] += 1
-                if "double" in field and state['step'] == 1:
-                    # Initialize the weights w1 and w2 with a small random value such that the difference is around 0 and uniformly distributed
-                    # The weights start at the function value at 0, such that we are at the maximum
-                    amplitude = self.f(torch.tensor(0))*torch.ones_like(
-                        p.data)
-                    state[f'w1_{i}'] = amplitude - init
-                    state[f'w2_{i}'] = amplitude - init - torch.empty_like(
-                        p.data).uniform_(-init, init).to(p.data.device)
+                # With two devices, we need two matrices to store the weights w1 and w2
+                if "double" in field:
+                    start = self.f(torch.tensor(0)).to(
+                        p.data.device)
+                    stop = self.f(torch.tensor(26)).to(
+                        p.data.device)
+                    if state['step'] == 1:
+                        # Initialize the weights w1 and w2 with a small random value such that the difference is around 0 and uniformly distributed
+                        # The weights start at the function value at 0, such that we are at the maximum
+                        state[f'w1_{i}'] = start * \
+                            torch.ones_like(p.data) - init
+                        state[f'w2_{i}'] = start * torch.ones_like(p.data) - init - torch.empty_like(
+                            p.data).uniform_(-init, init).to(p.data.device)
+                    w1 = state[f'w1_{i}'].add(
+                        torch.empty_like(p.data).normal_(0, noise))
+                    w2 = state[f'w2_{i}'].add(
+                        torch.empty_like(p.data).normal_(0, noise))
+                    # Clamp the weights to avoid numerical instability (NaN)
+                    w1 = torch.clamp(w1, stop, start)
+                    w2 = torch.clamp(w2, stop, start)
+                    # Retrieve the number of pulses associated with the current weight state
+                    x1 = self.f_inv(w1)
+                    x2 = self.f_inv(w2)
+                    # print(x1.max().item(), x2.max().item())
+                    # Compute the new value of the weights given a pulse set as the gradient
+                    f1 = self.f(x1 + lr*torch.abs(grad))
+                    f2 = self.f(x2 + lr*torch.abs(grad))
+                    # Update the weights depending on the sign of the gradient
+                    w1 = torch.where(grad < 0, f1, w1)
+                    w2 = torch.where(grad >= 0, f2, w2)
+                    # Reset w2 to the maximum value and reset w1 the relative position of w2
+                    idx1 = w1 <= stop
+                    w1[idx1] = stop - (start - w2[idx1])
+                    w2[idx1] = start
+                    # Reset w1 to the maximum value and reset w2 the relative position of w1
+                    idx2 = w2 <= stop
+                    w2[idx2] = stop - (start - w1[idx2])
+                    w1[idx2] = start
+                    state[f'w1_{i}'] = w1
+                    state[f'w2_{i}'] = w2
+                    w_t = (w2-w1)
                 # When we do single, we have only one device so we project the current weight on the functions depending on the sign of the gradient
                 if "single" in self.field:
                     # Compute x = f^-1(w), the previous x of the old weights
@@ -146,30 +176,5 @@ class Magnetoionic(torch.optim.Optimizer):
                                       self.f_plus(x - lr*torch.abs(grad)),
                                       self.f_minus(x - lr*torch.abs(grad)))
                     w_t = torch.clamp(w_t, -scale, scale)
-                # With two devices, we need two matrices to store the weights w1 and w2
-                elif "double" in self.field:
-                    w1 = state[f'w1_{i}']
-                    w2 = state[f'w2_{i}']
-                    # Retrieve the number of pulses associated with the current weight state
-                    x1 = self.f_inv(w1)
-                    x2 = self.f_inv(w2)
-                    # Compute the new value of the weights given a pulse set as the gradient
-                    f1 = self.f(x1 + lr*torch.abs(grad))
-                    f2 = self.f(x2 + lr*torch.abs(grad))
-                    # Update the weights depending on the sign of the gradient
-                    w1 = torch.where(grad < 0, f1, w1)
-                    w2 = torch.where(grad >= 0, f2, w2)
-                    # Reset the relative position of the weights when overflown
-                    threshold = self.f(torch.tensor(27))
-                    idx = w1 < threshold
-                    w2[idx] = threshold - (w1[idx] - w2[idx])
-                    w1[idx] = threshold
-                    idx = w2 < -threshold
-                    w1[idx] = threshold - (w2[idx] - w1[idx])
-                    w2[idx] = threshold
-                    # Update the state
-                    state[f'w1_{i}'] = w1
-                    state[f'w2_{i}'] = w2
-                    w_t = w2-w1
                 p.data = w_t
         return loss

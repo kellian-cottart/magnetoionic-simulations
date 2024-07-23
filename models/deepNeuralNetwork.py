@@ -1,7 +1,4 @@
-import copy
 import torch
-from .layers import *
-from .layers.activation import *
 
 
 class DNN(torch.nn.Module):
@@ -22,7 +19,6 @@ class DNN(torch.nn.Module):
         gnnum_groups (int): Number of groups in GroupNorm
         activation_function (torch.nn.functional): Activation function
         output_function (str): Output function
-        squared_inputs (bool): Whether to square the inputs
     """
 
     def __init__(self,
@@ -37,9 +33,9 @@ class DNN(torch.nn.Module):
                  affine: bool = False,
                  eps: float = 1e-5,
                  momentum: float = 0.15,
-                 gnnum_groups: int = 32,
                  activation_function: str = "relu",
-                 squared_inputs: bool = False,
+                 input_scale: float = 0.001,
+                 output_scale: float = 100,
                  *args,
                  **kwargs):
         super(DNN, self).__init__()
@@ -52,8 +48,8 @@ class DNN(torch.nn.Module):
         self.running_stats = running_stats
         self.affine = affine
         self.activation_function = activation_function
-        self.gnnum_groups = gnnum_groups
-        self.squared_inputs = squared_inputs
+        self.input_scale = input_scale
+        self.output_scale = output_scale
         if "activation_parameters" in kwargs:
             self.activation_parameters = kwargs["activation_parameters"]
         ### LAYER INITIALIZATION ###
@@ -68,7 +64,7 @@ class DNN(torch.nn.Module):
             layers (list): List of layer sizes (including input and output layers)
             bias (bool): Whether to use bias
         """
-        self.layers.append(nn.Flatten().to(self.device))
+        self.layers.append(torch.nn.Flatten().to(self.device))
         for i, _ in enumerate(layers[:-1]):
             # Linear layers with BatchNorm
             if self.dropout and i != 0:
@@ -78,8 +74,6 @@ class DNN(torch.nn.Module):
                 layers[i+1],
                 bias=bias,
                 device=self.device))
-            if self.squared_inputs == True:
-                self.layers.append(SquaredActivation().to(self.device))
             self.layers.append(self._norm_init(layers[i+1]))
             if i < len(layers)-2:
                 self.layers.append(self._activation_init())
@@ -96,31 +90,13 @@ class DNN(torch.nn.Module):
         """
         ### FORWARD PASS ###
         for layer in self.layers:
-            x = layer(x)
+            if isinstance(layer, torch.nn.Linear):
+                current = x*self.input_scale
+                voltage = layer(current)
+                x = voltage*self.output_scale
+            else:
+                x = layer(x)
         return x
-
-    def load_bn_states(self, state_dict):
-        """ Load batch normalization states
-
-        Args:
-            state_dict (dict): State dictionary
-
-        """
-        for i, layer in enumerate(self.layers):
-            if isinstance(layer, torch.nn.BatchNorm1d):
-                layer.load_state_dict(state_dict[f"layers.{i}"])
-
-    def save_bn_states(self):
-        """ Save batch normalization states
-
-        Returns:
-            dict: State dictionary
-        """
-        state_dict = {}
-        for i, layer in enumerate(self.layers):
-            if isinstance(layer, torch.nn.BatchNorm1d):
-                state_dict[f"layers.{i}"] = copy.deepcopy(layer.state_dict())
-        return state_dict
 
     def _activation_init(self):
         """
@@ -131,12 +107,6 @@ class DNN(torch.nn.Module):
             "relu": torch.nn.ReLU,
             "leaky_relu": torch.nn.LeakyReLU,
             "tanh": torch.nn.Tanh,
-            "sign": SignActivation,
-            "squared": SquaredActivation,
-            "elephant": ElephantActivation,
-            "gate": GateActivation,
-            "gaussian": GaussianActivation,
-            "hyperbolic": HyperbolicCosineActivation,
         }
         # add parameters to activation function if needed
         try:
@@ -154,9 +124,7 @@ class DNN(torch.nn.Module):
         """
         normalization_layers = {
             "batchnorm": lambda: torch.nn.BatchNorm1d(n_features, eps=self.eps, momentum=self.momentum, affine=self.affine, track_running_stats=self.running_stats),
-            "layernorm": lambda: torch.nn.LayerNorm(n_features),
             "instancenorm": lambda: torch.nn.InstanceNorm1d(n_features, eps=self.eps, affine=self.affine, track_running_stats=self.running_stats),
-            "groupnorm": lambda: torch.nn.GroupNorm(self.gnnum_groups, n_features),
         }
         return normalization_layers.get(self.normalization, torch.nn.Identity)().to(self.device)
 

@@ -35,6 +35,10 @@ parser.add_argument('--noise', type=float, default=0.0,
                     help='Gaussian noise standard deviation to add to the gradients')
 parser.add_argument('--init', type=float, default=0.01,
                     help='Standard deviation for the initialization of the weights')
+parser.add_argument('--input_scale', type=float, default=0.001,
+                    help='Scale of the input values')
+parser.add_argument('--output_scale', type=float, default=100,
+                    help='Scale of the output values')
 
 args = parser.parse_args()
 
@@ -50,6 +54,8 @@ FIELD = args.field  # Strength of the magnetic field
 DIVISOR = 1  # Divisor for the learning rate
 SCALE = args.scale  # Scale of the functions f_minus and f_plus
 NOISE = args.noise  # Gaussian noise standard deviation to add to the gradients
+INPUT_SCALE = args.input_scale  # Scale of the input values
+OUTPUT_SCALE = args.output_scale  # Scale of the output values
 # Fraction of the epochs to switch the magnetic field
 TIME_SWITCH = args.time_switch
 TASK = args.task  # Task to perform (MNIST or Fashion)
@@ -58,7 +64,7 @@ LOSS = torch.nn.CrossEntropyLoss()  # Loss function
 FOLDER = "simulations"  # Folder to save the simulations
 
 
-def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
+def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
     accuracies = torch.zeros(epochs)
     gradients = torch.zeros(epochs)
     for epoch in pbar:
@@ -81,12 +87,11 @@ def training(DEVICE, BATCH_SIZE, LOSS, train_mnist, test_mnist, dnn, epochs, opt
         # TEST WITH BATCHES
         acc = evaluation(DEVICE, BATCH_SIZE, test_mnist,
                          dnn, accuracies, epoch)
-        pbar.set_description(
-            f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f}")
         # Compute the mean absolute value of the gradients
         gradients[epoch] = LR*parameters_to_vector(
             [p.grad for p in dnn.parameters()]).abs().mean().item()
-        print(f"Mean gradient: {gradients[epoch]: .4f}")
+        pbar.set_description(
+            f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f} - Gradient: {gradients[epoch]:.4f}")
     return l, accuracies, gradients
 
 
@@ -110,7 +115,7 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
         "-".join(FIELD) + \
-        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}"
+        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-output-{OUTPUT_SCALE}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -135,16 +140,25 @@ if __name__ == "__main__":
             dropout=False,
             normalization="batchnorm",
             running_stats=True,
-            device=DEVICE
+            device=DEVICE,
+            input_scale=INPUT_SCALE,
+            output_scale=OUTPUT_SCALE,
+            noise=NOISE
         )
         # OPTIMIZER
         field = FIELD[0]
         switch = None if len(FIELD) == 1 else FIELD[1]
-        optim = Magnetoionic(dnn.parameters(), lr=LR,
-                             field=field, scale=SCALE, noise=NOISE, init=INIT)
+        optim = Magnetoionic(
+            dnn.parameters(),
+            lr=LR,
+            field=field,
+            scale=SCALE,
+            init=INIT,
+            noise=NOISE,
+        )
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
-        l, acc, grad = training(DEVICE, BATCH_SIZE, LOSS, train_mnist,
+        l, acc, grad = training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist,
                                 test_mnist, dnn, EPOCHS, optim, pbar, switch=switch, time_switch=TIME_SWITCH)
         print(f"Accuracy: {acc[-1]*100: .2f} %, Loss: {l.item(): .4f}")
         # SAVE THE SIMULATION
@@ -156,14 +170,15 @@ if __name__ == "__main__":
             "batch_size": BATCH_SIZE,
             "layers": LAYERS,
             "epochs": EPOCHS,
-            "noise": NOISE,
+            "input_scale": INPUT_SCALE,
+            "output_scale": OUTPUT_SCALE,
             "optimizer": optim.__class__.__name__,
             "optimizer_parameters": {
                 "lr": LR,
                 "field": FIELD,
                 "scale": SCALE,
+                "init": INIT,
                 "noise": NOISE,
-                "init": INIT
             },
             "criterion": LOSS.__class__.__name__,
             "loss": l.item(),

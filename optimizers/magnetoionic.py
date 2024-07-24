@@ -66,7 +66,6 @@ class Magnetoionic(torch.optim.Optimizer):
 
         elif field == "single-weak":
             # Set of functions between -1 and 1
-
             def f_weak_minus(x): return -1.28 * \
                 torch.log(0.997*torch.log(x+5.02))+1.583
 
@@ -75,14 +74,12 @@ class Magnetoionic(torch.optim.Optimizer):
 
             def f_weak_plus(x): return 0.9066 * \
                 torch.log(1.176*torch.log(x+4.42))-0.507
-
             def f_weak_inverse_plus(y): return torch.exp(
                 torch.exp((y + 0.507)/0.9066)/1.176) - 4.42
 
             self.f_minus = lambda x: 2*scale * f_weak_minus(x) - scale
             self.f_inverse_minus = lambda y: f_weak_inverse_minus(
                 (y + scale)/(2*scale))
-
             self.f_plus = lambda x: 2*scale * f_weak_plus(x) - scale
             self.f_inverse_plus = lambda y: f_weak_inverse_plus(
                 (y + scale)/(2*scale))
@@ -128,7 +125,7 @@ class Magnetoionic(torch.optim.Optimizer):
                 if "double" in field:
                     start = self.f(torch.tensor(0)).to(
                         p.data.device)
-                    stop = self.f(torch.tensor(26)).to(
+                    stop = self.f(torch.tensor(27)).to(
                         p.data.device)
                     if state['step'] == 1:
                         # Initialize the weights w1 and w2 with a small random value such that the difference is around 0 and uniformly distributed
@@ -137,10 +134,13 @@ class Magnetoionic(torch.optim.Optimizer):
                             torch.ones_like(p.data) - init
                         state[f'w2_{i}'] = start * torch.ones_like(p.data) - init - torch.empty_like(
                             p.data).uniform_(-init, init).to(p.data.device)
-                    w1 = state[f'w1_{i}'].add(
-                        torch.empty_like(p.data).normal_(0, noise))
-                    w2 = state[f'w2_{i}'].add(
-                        torch.empty_like(p.data).normal_(0, noise))
+                    # w1 = state[f'w1_{i}'].add(
+                    #     torch.empty_like(p.data).normal_(0, noise))
+                    # w2 = state[f'w2_{i}'].add(
+                    #     torch.empty_like(p.data).normal_(0, noise))
+                    grad = grad.add(torch.empty_like(p.data).normal_(0, noise))
+                    w1 = state[f'w1_{i}']
+                    w2 = state[f'w2_{i}']
                     # Clamp the weights to avoid numerical instability (NaN)
                     w1 = torch.clamp(w1, stop, start)
                     w2 = torch.clamp(w2, stop, start)
@@ -156,15 +156,15 @@ class Magnetoionic(torch.optim.Optimizer):
                     w2 = torch.where(grad >= 0, f2, w2)
                     # Reset w2 to the maximum value and reset w1 the relative position of w2
                     idx1 = w1 <= stop
-                    w1[idx1] = stop - (start - w2[idx1])
+                    w1[idx1] = stop - (w2[idx1] - start)
                     w2[idx1] = start
                     # Reset w1 to the maximum value and reset w2 the relative position of w1
                     idx2 = w2 <= stop
-                    w2[idx2] = stop - (start - w1[idx2])
+                    w2[idx2] = stop - (w1[idx2] - start)
                     w1[idx2] = start
                     state[f'w1_{i}'] = w1
                     state[f'w2_{i}'] = w2
-                    w_t = (w2-w1)
+                    w_t = w2-w1
                 # When we do single, we have only one device so we project the current weight on the functions depending on the sign of the gradient
                 if "single" in self.field:
                     # Compute x = f^-1(w), the previous x of the old weights

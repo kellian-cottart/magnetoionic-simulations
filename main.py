@@ -37,7 +37,7 @@ parser.add_argument('--init', type=float, default=0.01,
                     help='Standard deviation for the initialization of the weights')
 parser.add_argument('--input_scale', type=float, default=0.001,
                     help='Scale of the input values')
-parser.add_argument('--output_scale', type=float, default=100,
+parser.add_argument('--output_scale', type=float, default=1000,
                     help='Scale of the output values')
 
 args = parser.parse_args()
@@ -115,7 +115,7 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
         "-".join(FIELD) + \
-        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-output-{OUTPUT_SCALE}"
+        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-input-{INPUT_SCALE}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -143,7 +143,6 @@ if __name__ == "__main__":
             device=DEVICE,
             input_scale=INPUT_SCALE,
             output_scale=OUTPUT_SCALE,
-            noise=NOISE
         )
         # OPTIMIZER
         field = FIELD[0]

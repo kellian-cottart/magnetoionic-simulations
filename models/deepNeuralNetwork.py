@@ -1,4 +1,5 @@
 import torch
+from torchvision.transforms import v2
 
 
 class DNN(torch.nn.Module):
@@ -35,7 +36,7 @@ class DNN(torch.nn.Module):
                  momentum: float = 0.15,
                  activation_function: str = "relu",
                  input_scale: float = 0.001,
-                 output_scale: float = 100,
+                 output_scale: float = 1000,
                  *args,
                  **kwargs):
         super(DNN, self).__init__()

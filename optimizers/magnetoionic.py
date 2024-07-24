@@ -13,6 +13,7 @@ class Magnetoionic(torch.optim.Optimizer):
         field (str, optional): type of magnetic field applied, either "strong", "weak" or "linear"
         scale (float, optional): scale of the functions f_minus and f_plus
         noise (float, optional): Gaussian noise standard deviation to add to the gradients
+        device_variability (float, optional): Gaussian noise standard deviation to change the slope of the functions
         eps (float, optional): term added to the denominator to improve numerical stability
     """
 
@@ -23,6 +24,7 @@ class Magnetoionic(torch.optim.Optimizer):
                  scale=1,
                  init=0.01,
                  noise=0.0,
+                 device_variability=0.2,
                  eps=1e-8):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -36,7 +38,8 @@ class Magnetoionic(torch.optim.Optimizer):
                         eps=eps,
                         field=field,
                         init=init,
-                        noise=noise,)
+                        noise=noise,
+                        device_variability=device_variability)
         super(Magnetoionic, self).__init__(params, defaults)
 
     def set_field(self, field, scale):
@@ -110,13 +113,17 @@ class Magnetoionic(torch.optim.Optimizer):
             for i, p in enumerate(group['params']):
                 if p.grad is None:
                     continue
-                grad = p.grad.data
                 state = self.state[p]
                 lr = group['lr']
                 scale = group['scale']
                 field = group['field']
                 init = group['init']
                 noise = group['noise']
+                variability = group['device_variability']
+                # Add noise to the gradients
+                p.grad.data = p.grad.data.add(
+                    torch.empty_like(p.data).normal_(0, noise))
+                grad = p.grad.data
                 # State initialization
                 if len(state) == 0:
                     state['step'] = 0
@@ -134,23 +141,33 @@ class Magnetoionic(torch.optim.Optimizer):
                             torch.ones_like(p.data) - init
                         state[f'w2_{i}'] = start * torch.ones_like(p.data) - init - torch.empty_like(
                             p.data).uniform_(-init, init).to(p.data.device)
+                        # Noise to multiply the gradient by to introduce variability in the device
+                        state[f'variability_w1_{i}'] = torch.empty_like(
+                            state[f'w1_{i}']).normal_(1, variability).abs()
+                        state[f'variability_w2_{i}'] = torch.empty_like(
+                            state[f'w2_{i}']).normal_(1, variability).abs()
+
+                    # # Add noise to the weights
                     # w1 = state[f'w1_{i}'].add(
                     #     torch.empty_like(p.data).normal_(0, noise))
                     # w2 = state[f'w2_{i}'].add(
                     #     torch.empty_like(p.data).normal_(0, noise))
-                    grad = grad.add(torch.empty_like(p.data).normal_(0, noise))
+
+                    # # Clamp the weights to avoid numerical instability (NaN)
+                    # w1 = torch.clamp(w1, stop, start)
+                    # w2 = torch.clamp(w2, stop, start)
+                    # Retrieve the weights from the state
                     w1 = state[f'w1_{i}']
                     w2 = state[f'w2_{i}']
-                    # Clamp the weights to avoid numerical instability (NaN)
-                    w1 = torch.clamp(w1, stop, start)
-                    w2 = torch.clamp(w2, stop, start)
                     # Retrieve the number of pulses associated with the current weight state
                     x1 = self.f_inv(w1)
                     x2 = self.f_inv(w2)
                     # print(x1.max().item(), x2.max().item())
                     # Compute the new value of the weights given a pulse set as the gradient
-                    f1 = self.f(x1 + lr*torch.abs(grad))
-                    f2 = self.f(x2 + lr*torch.abs(grad))
+                    f1 = self.f(x1 + lr*torch.abs(grad) *
+                                state[f'variability_w1_{i}'])
+                    f2 = self.f(x2 + lr*torch.abs(grad) *
+                                state[f'variability_w2_{i}'])
                     # Update the weights depending on the sign of the gradient
                     w1 = torch.where(grad < 0, f1, w1)
                     w2 = torch.where(grad >= 0, f2, w2)

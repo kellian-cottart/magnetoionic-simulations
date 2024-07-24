@@ -25,7 +25,7 @@ parser.add_argument('--layers', type=int, nargs='+',
                     default=[512], help='Number of neurons in each hidden layer')
 parser.add_argument('--scale', type=float, default=1,
                     help='Scale of the functions f_minus and f_plus')
-parser.add_argument('--n_models', type=int, default=5,
+parser.add_argument('--n_models', type=int, default=10,
                     help='Number of models to train')
 parser.add_argument('--task', type=str, default='MNIST',
                     help='Task to perform (MNIST or Fashion)')
@@ -39,6 +39,8 @@ parser.add_argument('--input_scale', type=float, default=0.001,
                     help='Scale of the input values')
 parser.add_argument('--output_scale', type=float, default=1000,
                     help='Scale of the output values')
+parser.add_argument('--var', type=float, default=0.2,
+                    help='Gaussian noise standard deviation to change the slope of the functions')
 
 args = parser.parse_args()
 
@@ -56,6 +58,8 @@ SCALE = args.scale  # Scale of the functions f_minus and f_plus
 NOISE = args.noise  # Gaussian noise standard deviation to add to the gradients
 INPUT_SCALE = args.input_scale  # Scale of the input values
 OUTPUT_SCALE = args.output_scale  # Scale of the output values
+# Gaussian noise standard deviation to change the slope of the functions
+DEVICE_VARIABILITY = args.var
 # Fraction of the epochs to switch the magnetic field
 TIME_SWITCH = args.time_switch
 TASK = args.task  # Task to perform (MNIST or Fashion)
@@ -115,7 +119,7 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
         "-".join(FIELD) + \
-        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-input-{INPUT_SCALE}"
+        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-var-{DEVICE_VARIABILITY}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -154,6 +158,7 @@ if __name__ == "__main__":
             scale=SCALE,
             init=INIT,
             noise=NOISE,
+            device_variability=DEVICE_VARIABILITY,
         )
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
@@ -178,6 +183,8 @@ if __name__ == "__main__":
                 "scale": SCALE,
                 "init": INIT,
                 "noise": NOISE,
+                "device_variability": DEVICE_VARIABILITY,
+                "time_switch": TIME_SWITCH,
             },
             "criterion": LOSS.__class__.__name__,
             "loss": l.item(),

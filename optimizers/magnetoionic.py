@@ -1,6 +1,4 @@
 import torch
-import numpy as np
-from torch.nn.utils import parameters_to_vector, vector_to_parameters
 
 
 class Magnetoionic(torch.optim.Optimizer):
@@ -20,11 +18,11 @@ class Magnetoionic(torch.optim.Optimizer):
     def __init__(self,
                  params,
                  lr=1e-3,
-                 field="weak",
+                 field="double-linear",
                  scale=1,
                  init=0.01,
-                 noise=0.0,
                  device_variability=0.2,
+                 clipping=0.1,
                  eps=1e-8):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -38,8 +36,8 @@ class Magnetoionic(torch.optim.Optimizer):
                         eps=eps,
                         field=field,
                         init=init,
-                        noise=noise,
-                        device_variability=device_variability)
+                        device_variability=device_variability,
+                        clipping=clipping)
         super(Magnetoionic, self).__init__(params, defaults)
 
     def set_field(self, field, scale):
@@ -118,11 +116,8 @@ class Magnetoionic(torch.optim.Optimizer):
                 scale = group['scale']
                 field = group['field']
                 init = group['init']
-                noise = group['noise']
                 variability = group['device_variability']
-                # Add noise to the gradients
-                p.grad.data = p.grad.data.add(
-                    torch.empty_like(p.data).normal_(0, noise))
+                clipping = group["clipping"]
                 grad = p.grad.data
                 # State initialization
                 if len(state) == 0:
@@ -146,28 +141,21 @@ class Magnetoionic(torch.optim.Optimizer):
                             state[f'w1_{i}']).normal_(1, variability).abs()
                         state[f'variability_w2_{i}'] = torch.empty_like(
                             state[f'w2_{i}']).normal_(1, variability).abs()
-
-                    # # Add noise to the weights
-                    # w1 = state[f'w1_{i}'].add(
-                    #     torch.empty_like(p.data).normal_(0, noise))
-                    # w2 = state[f'w2_{i}'].add(
-                    #     torch.empty_like(p.data).normal_(0, noise))
-
-                    # # Clamp the weights to avoid numerical instability (NaN)
-                    # w1 = torch.clamp(w1, stop, start)
-                    # w2 = torch.clamp(w2, stop, start)
-                    # Retrieve the weights from the state
                     w1 = state[f'w1_{i}']
                     w2 = state[f'w2_{i}']
                     # Retrieve the number of pulses associated with the current weight state
                     x1 = self.f_inv(w1)
                     x2 = self.f_inv(w2)
-                    # print(x1.max().item(), x2.max().item())
                     # Compute the new value of the weights given a pulse set as the gradient
-                    f1 = self.f(x1 + lr*torch.abs(grad) *
-                                state[f'variability_w1_{i}'])
-                    f2 = self.f(x2 + lr*torch.abs(grad) *
-                                state[f'variability_w2_{i}'])
+                    update1 = lr*torch.abs(grad)*state[f'variability_w1_{i}']
+                    update2 = lr*torch.abs(grad)*state[f'variability_w2_{i}']
+                    # Clip updates if below 0.05 to 0
+                    update1 = torch.where(
+                        update1 < clipping, torch.zeros_like(update1), update1)
+                    update2 = torch.where(
+                        update2 < clipping, torch.zeros_like(update2), update2)
+                    f1 = self.f(x1 + update1)
+                    f2 = self.f(x2 + update2)
                     # Update the weights depending on the sign of the gradient
                     w1 = torch.where(grad < 0, f1, w1)
                     w2 = torch.where(grad >= 0, f2, w2)

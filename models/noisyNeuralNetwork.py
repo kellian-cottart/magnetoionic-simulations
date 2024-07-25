@@ -2,7 +2,7 @@ import torch
 from .layers import *
 
 
-class DNN(torch.nn.Module):
+class NNN(torch.nn.Module):
     """ Deep Neural Network
 
     Args:
@@ -37,9 +37,12 @@ class DNN(torch.nn.Module):
                  activation_function: str = "relu",
                  input_scale: float = 0.001,
                  output_scale: float = 1000,
-                 *args,
+                 field="double-linear",
+                 resistor_noise=0.0,
+                 voltage_noise=0.0,
+                 * args,
                  **kwargs):
-        super(DNN, self).__init__()
+        super(NNN, self).__init__()
         self.device = device
         self.layers = torch.nn.ModuleList().to(self.device)
         self.dropout = dropout
@@ -51,6 +54,9 @@ class DNN(torch.nn.Module):
         self.activation_function = activation_function
         self.input_scale = input_scale
         self.output_scale = output_scale
+        self.field = field
+        self.resistor_noise = resistor_noise
+        self.voltage_noise = voltage_noise
         if "activation_parameters" in kwargs:
             self.activation_parameters = kwargs["activation_parameters"]
         ### LAYER INITIALIZATION ###
@@ -70,10 +76,14 @@ class DNN(torch.nn.Module):
             # Linear layers with BatchNorm
             if self.dropout and i != 0:
                 self.layers.append(torch.nn.Dropout(p=0.2))
-            self.layers.append(torch.nn.Linear(
+            self.layers.append(NoisyDoubleLinear(
                 layers[i],
                 layers[i+1],
-                bias=bias,
+                field=self.field,
+                resistor_noise=self.resistor_noise,
+                voltage_noise=self.voltage_noise,
+                input_scale=self.input_scale,
+                output_scale=self.output_scale,
                 device=self.device))
             self.layers.append(self._norm_init(layers[i+1]))
             if i < len(layers)-2:
@@ -91,12 +101,7 @@ class DNN(torch.nn.Module):
         """
         ### FORWARD PASS ###
         for layer in self.layers:
-            if isinstance(layer, torch.nn.Linear):
-                current = x*self.input_scale
-                voltage = layer(current)
-                x = voltage*self.output_scale
-            else:
-                x = layer(x)
+            x = layer(x)
         return x
 
     def _activation_init(self):

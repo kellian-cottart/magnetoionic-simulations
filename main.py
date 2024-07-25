@@ -1,6 +1,6 @@
 import torch
-from models import DNN
-from optimizers import Magnetoionic
+from models import *
+from optimizers import *
 from dataloader import *
 import tqdm
 import json
@@ -31,8 +31,6 @@ parser.add_argument('--task', type=str, default='MNIST',
                     help='Task to perform (MNIST or Fashion)')
 parser.add_argument('--time_switch', type=int, default=None,
                     help='Fraction of the epochs to switch the magnetic field (2 is half of the epochs)')
-parser.add_argument('--noise', type=float, default=0.0,
-                    help='Gaussian noise standard deviation to add to the gradients')
 parser.add_argument('--init', type=float, default=0.01,
                     help='Standard deviation for the initialization of the weights')
 parser.add_argument('--input_scale', type=float, default=0.001,
@@ -41,6 +39,12 @@ parser.add_argument('--output_scale', type=float, default=1000,
                     help='Scale of the output values')
 parser.add_argument('--var', type=float, default=0.2,
                     help='Gaussian noise standard deviation to change the slope of the functions')
+parser.add_argument('--clipping', type=float, default=0,
+                    help='Clipping value for the gradients (lower bound)')
+parser.add_argument('--resistor_noise', type=float, default=0,
+                    help='Gaussian noise standard deviation to add to the resistor values')
+parser.add_argument('--voltage_noise', type=float, default=0,
+                    help='Gaussian noise standard deviation to add to the voltage values')
 
 args = parser.parse_args()
 
@@ -55,11 +59,16 @@ LR = args.lr  # Learning rate for the optimizer
 FIELD = args.field  # Strength of the magnetic field
 DIVISOR = 1  # Divisor for the learning rate
 SCALE = args.scale  # Scale of the functions f_minus and f_plus
-NOISE = args.noise  # Gaussian noise standard deviation to add to the gradients
 INPUT_SCALE = args.input_scale  # Scale of the input values
 OUTPUT_SCALE = args.output_scale  # Scale of the output values
+# Gaussian noise standard deviation to add to the voltage values
+VOLTAGE_NOISE = args.voltage_noise
+# Gaussian noise standard deviation to add to the resistor values
+RESISTOR_NOISE = args.resistor_noise
+
 # Gaussian noise standard deviation to change the slope of the functions
 DEVICE_VARIABILITY = args.var
+CLIPPING = args.clipping  # Clipping value for the gradients (lower bound)
 # Fraction of the epochs to switch the magnetic field
 TIME_SWITCH = args.time_switch
 TASK = args.task  # Task to perform (MNIST or Fashion)
@@ -95,7 +104,7 @@ def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs,
         gradients[epoch] = LR*parameters_to_vector(
             [p.grad for p in dnn.parameters()]).abs().mean().item()
         pbar.set_description(
-            f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f} - Gradient: {gradients[epoch]:.4f}")
+            f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f} - <|grad|>: {gradients[epoch]:.4f}")
     return l, accuracies, gradients
 
 
@@ -119,7 +128,7 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
 if __name__ == "__main__":
     simulation_id = f"{datetime.datetime.now().strftime('%Y%m%d%H%M%S')}-{TASK}-" + \
         "-".join(FIELD) + \
-        f"-{LR}-switch-{TIME_SWITCH}-scale-{SCALE}-noise-{NOISE}-var-{DEVICE_VARIABILITY}"
+        f"-{LR}-var-{DEVICE_VARIABILITY}-clipping-{CLIPPING}-resistor-{RESISTOR_NOISE}-voltage-{VOLTAGE_NOISE}"
     os.makedirs(FOLDER, exist_ok=True)
     folder_path = os.path.join(FOLDER, simulation_id)
     for i in range(NUMBER_MODELS):
@@ -136,7 +145,11 @@ if __name__ == "__main__":
             loader=loader, batch_size=BATCH_SIZE, task=TASK)
         # MODEL DEFINITION
         size_in = torch.prod(torch.tensor(shape)).item()
-        dnn = DNN(
+        # OPTIMIZER
+        field = FIELD[0]
+        switch = None if len(FIELD) == 1 else FIELD[1]
+
+        dnn = NNN(
             layers=[size_in] + LAYERS + [target_size],
             activation="relu",
             init="uniform",
@@ -147,19 +160,41 @@ if __name__ == "__main__":
             device=DEVICE,
             input_scale=INPUT_SCALE,
             output_scale=OUTPUT_SCALE,
+            field=field,
+            resistor_noise=RESISTOR_NOISE,
+            voltage_noise=VOLTAGE_NOISE,
         )
-        # OPTIMIZER
-        field = FIELD[0]
-        switch = None if len(FIELD) == 1 else FIELD[1]
-        optim = Magnetoionic(
-            dnn.parameters(),
+        parameters = list(dnn.parameters())
+        optim = MagnetoionicDouble(
+            parameters,
             lr=LR,
             field=field,
-            scale=SCALE,
-            init=INIT,
-            noise=NOISE,
             device_variability=DEVICE_VARIABILITY,
+            clipping=CLIPPING,
         )
+
+        # dnn = DNN(
+        #     layers=[size_in] + LAYERS + [target_size],
+        #     activation="relu",
+        #     init="uniform",
+        #     std=INIT,
+        #     dropout=False,
+        #     normalization="batchnorm",
+        #     running_stats=True,
+        #     device=DEVICE,
+        #     input_scale=INPUT_SCALE,
+        #     output_scale=OUTPUT_SCALE,
+        # )
+        # optim = Magnetoionic(
+        #     dnn.parameters(),
+        #     lr=LR,
+        #     field=field,
+        #     scale=SCALE,
+        #     init=INIT,
+        #     noise=NOISE,
+        #     device_variability=DEVICE_VARIABILITY,
+        #     clipping=CLIPPING,
+        # )
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
         l, acc, grad = training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist,
@@ -176,15 +211,17 @@ if __name__ == "__main__":
             "epochs": EPOCHS,
             "input_scale": INPUT_SCALE,
             "output_scale": OUTPUT_SCALE,
+            "voltage_noise": VOLTAGE_NOISE,
+            "resistor_noise": RESISTOR_NOISE,
+            "time_switch": TIME_SWITCH,
             "optimizer": optim.__class__.__name__,
             "optimizer_parameters": {
                 "lr": LR,
                 "field": FIELD,
                 "scale": SCALE,
                 "init": INIT,
-                "noise": NOISE,
                 "device_variability": DEVICE_VARIABILITY,
-                "time_switch": TIME_SWITCH,
+                "clipping": CLIPPING,
             },
             "criterion": LOSS.__class__.__name__,
             "loss": l.item(),

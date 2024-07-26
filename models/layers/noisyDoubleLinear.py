@@ -7,11 +7,11 @@ class NoisyDoubleLinear(torch.nn.Module):
             self,
             in_features,
             out_features,
-            field="double-linear",
+            f,
+            f_inv,
             resistor_noise=0.0,
             voltage_noise=0.0,
             input_scale=0.001,
-            output_scale=1000,
             init=0.01,
             device="cuda:0"):
         super(NoisyDoubleLinear, self).__init__()
@@ -22,8 +22,8 @@ class NoisyDoubleLinear(torch.nn.Module):
         self.init = init
         self.device = device
         self.input_scale = input_scale
-        self.output_scale = output_scale
-        self.set_field(field)
+        self.f = f
+        self.f_inv = f_inv
         self.weight1 = torch.nn.Parameter(torch.empty(
             (out_features, in_features), device=self.device))
         self.weight2 = torch.nn.Parameter(torch.empty(
@@ -38,26 +38,16 @@ class NoisyDoubleLinear(torch.nn.Module):
         self.weight2.data = self.start * torch.ones_like(self.weight2).to(
             self.device) - self.init - torch.empty_like(self.weight2).uniform_(-self.init, self.init).to(self.device)
 
-    def set_field(self, field):
-        if field == "double-linear":
-            self.f = lambda x: -0.021*x + 2.742
-            self.f_inv = lambda y: (y - 2.742)/(-0.021)
-        elif field == "double-exponential":
-            self.f = lambda x: 1.530 * torch.exp(-x/9.741) + 0.750
-            self.f_inv = lambda y: -9.741 * torch.log((y - 0.750)/1.530)
-        else:
-            raise ValueError("Field not recognized")
-
     def forward(self, x):
         intensity = x * self.input_scale
         voltage = NoisyForward.apply(
             intensity, self.weight1, self.weight2, self.resistor_noise)
         voltage_noise = torch.empty_like(voltage).normal_(
             0, self.voltage_noise).to(self.device)
-        return (voltage + voltage_noise) * self.output_scale
+        return (voltage + voltage_noise)
 
     def __repr__(self):
-        return f"NoisyDoubleLinear(in_features={self.in_features}, out_features={self.out_features}, resistor_noise={self.resistor_noise}, voltage_noise={self.voltage_noise}, input_scale={self.input_scale}, output_scale={self.output_scale}, init={self.init}, device={self.device})"
+        return f"NoisyDoubleLinear(in_features={self.in_features}, out_features={self.out_features}, resistor_noise={self.resistor_noise}, voltage_noise={self.voltage_noise}, input_scale={self.input_scale}, init={self.init}, device={self.device})"
 
 
 class NoisyForward(torch.autograd.Function):

@@ -8,17 +8,18 @@ class MagnetoionicDouble(torch.optim.Optimizer):
         params (iterable): iterable of parameters to optimize or dicts defining
             parameter groups
         lr (float, optional): learning rate
-        field (str, optional): type of magnetic field applied, either "strong", "weak" or "linear"
-        scale (float, optional): scale of the functions f_minus and f_plus
-        noise (float, optional): Gaussian noise standard deviation to add to the gradients
+        f (callable): function to apply to the weights
+        f_inv (callable): inverse function to apply to the weights
         device_variability (float, optional): Gaussian noise standard deviation to change the slope of the functions
+        clipping (float, optional): value to clip the updates
         eps (float, optional): term added to the denominator to improve numerical stability
     """
 
     def __init__(self,
                  params,
+                 f,
+                 f_inv,
                  lr=1e-3,
-                 field="double-linear",
                  device_variability=0.2,
                  clipping=0.1,
                  eps=1e-8):
@@ -26,22 +27,13 @@ class MagnetoionicDouble(torch.optim.Optimizer):
             raise ValueError("Invalid learning rate: {}".format(lr))
         if not 0.0 <= eps:
             raise ValueError("Invalid epsilon value: {}".format(eps))
-        self.set_field(field)
+        self.f = f
+        self.f_inv = f_inv
         defaults = dict(lr=lr,
                         eps=eps,
-                        field=field,
                         device_variability=device_variability,
                         clipping=clipping)
         super(MagnetoionicDouble, self).__init__(params, defaults)
-
-    def set_field(self, field):
-        if field == "double-linear":
-            self.f = lambda x: -0.021*x + 2.742
-            self.f_inv = lambda y: (y - 2.742)/(-0.021)
-        elif field == "double-exponential":
-            self.f = lambda x: 1.530 * torch.exp(-x/9.741) + 0.750
-            self.f_inv = lambda y: -9.741 * torch.log((y - 0.750)/1.530)
-        self.field = field
 
     def step(self, closure=None):
         """Performs a single optimization step.

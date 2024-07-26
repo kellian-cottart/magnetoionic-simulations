@@ -6,7 +6,7 @@ import tqdm
 import json
 import datetime
 import argparse
-from torch.nn.utils import parameters_to_vector, vector_to_parameters
+from torch.nn.utils import parameters_to_vector
 
 # Arguments
 parser = argparse.ArgumentParser(
@@ -35,16 +35,12 @@ parser.add_argument('--init', type=float, default=0.01,
                     help='Standard deviation for the initialization of the weights')
 parser.add_argument('--input_scale', type=float, default=0.001,
                     help='Scale of the input values')
-parser.add_argument('--output_scale', type=float, default=1000,
-                    help='Scale of the output values')
 parser.add_argument('--var', type=float, default=0.2,
                     help='Gaussian noise standard deviation to change the slope of the functions')
 parser.add_argument('--clipping', type=float, default=0,
                     help='Clipping value for the gradients (lower bound)')
 parser.add_argument('--resistor_noise', type=float, default=0,
                     help='Gaussian noise standard deviation to add to the resistor values')
-parser.add_argument('--voltage_noise', type=float, default=0,
-                    help='Gaussian noise standard deviation to add to the voltage values')
 
 args = parser.parse_args()
 
@@ -60,12 +56,10 @@ FIELD = args.field  # Strength of the magnetic field
 DIVISOR = 1  # Divisor for the learning rate
 SCALE = args.scale  # Scale of the functions f_minus and f_plus
 INPUT_SCALE = args.input_scale  # Scale of the input values
-OUTPUT_SCALE = args.output_scale  # Scale of the output values
-# Gaussian noise standard deviation to add to the voltage values
-VOLTAGE_NOISE = args.voltage_noise
 # Gaussian noise standard deviation to add to the resistor values
 RESISTOR_NOISE = args.resistor_noise
-
+# Gaussian noise standard deviation to add to the voltage values
+VOLTAGE_NOISE = RESISTOR_NOISE*1e-4
 # Gaussian noise standard deviation to change the slope of the functions
 DEVICE_VARIABILITY = args.var
 CLIPPING = args.clipping  # Clipping value for the gradients (lower bound)
@@ -75,6 +69,16 @@ TASK = args.task  # Task to perform (MNIST or Fashion)
 LAYERS = args.layers  # Number of neurons in each hidden layer
 LOSS = torch.nn.CrossEntropyLoss()  # Loss function
 FOLDER = "simulations"  # Folder to save the simulations
+
+
+def set_field(field):
+    if field == "double-linear":
+        def f(x): return -0.021*x + 2.742
+        def f_inv(y): return (y - 2.742)/(-0.021)
+    elif field == "double-exponential":
+        def f(x): return 1.530 * torch.exp(-x/9.741) + 0.750
+        def f_inv(y): return -9.741 * torch.log((y - 0.750)/1.530)
+    return f, f_inv
 
 
 def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
@@ -98,17 +102,16 @@ def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs,
             l.backward()
             optim.step()
         # TEST WITH BATCHES
-        acc = evaluation(DEVICE, BATCH_SIZE, test_mnist,
-                         dnn, accuracies, epoch)
+        accuracies[epoch] = evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn)
         # Compute the mean absolute value of the gradients
         gradients[epoch] = LR*parameters_to_vector(
             [p.grad for p in dnn.parameters()]).abs().mean().item()
         pbar.set_description(
-            f"Epoch {epoch+1}/{epochs} - Test accuracy: {acc*100:.2f} % - Loss: {l.item():.4f} - <|grad|>: {gradients[epoch]:.4f}")
+            f"Epoch {epoch+1}/{epochs} - Test accuracy: {accuracies[epoch]*100:.2f} % - Loss: {l.item():.4f} - <|grad|>: {gradients[epoch]:.4f}")
     return l, accuracies, gradients
 
 
-def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
+def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn):
     dnn.eval()
     num_batches = len(test_mnist) // BATCH_SIZE + 1
     acc = 0
@@ -121,7 +124,6 @@ def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn, accuracies, epoch):
         yhat = dnn(x)
         acc += (yhat.argmax(dim=1) == y).sum().item()
     acc /= len(test_mnist)
-    accuracies[epoch] = acc
     return acc
 
 
@@ -148,7 +150,9 @@ if __name__ == "__main__":
         # OPTIMIZER
         field = FIELD[0]
         switch = None if len(FIELD) == 1 else FIELD[1]
-
+        # Functions for the magnetic field
+        f = set_field(field)[0]
+        f_inv = set_field(field)[1]
         dnn = NNN(
             layers=[size_in] + LAYERS + [target_size],
             activation="relu",
@@ -159,79 +163,28 @@ if __name__ == "__main__":
             running_stats=True,
             device=DEVICE,
             input_scale=INPUT_SCALE,
-            output_scale=OUTPUT_SCALE,
-            field=field,
             resistor_noise=RESISTOR_NOISE,
             voltage_noise=VOLTAGE_NOISE,
+            f=f,
+            f_inv=f_inv,
         )
         parameters = list(dnn.parameters())
         optim = MagnetoionicDouble(
             parameters,
             lr=LR,
-            field=field,
             device_variability=DEVICE_VARIABILITY,
             clipping=CLIPPING,
+            f=f,
+            f_inv=f_inv,
         )
-
-        # dnn = DNN(
-        #     layers=[size_in] + LAYERS + [target_size],
-        #     activation="relu",
-        #     init="uniform",
-        #     std=INIT,
-        #     dropout=False,
-        #     normalization="batchnorm",
-        #     running_stats=True,
-        #     device=DEVICE,
-        #     input_scale=INPUT_SCALE,
-        #     output_scale=OUTPUT_SCALE,
-        # )
-        # optim = Magnetoionic(
-        #     dnn.parameters(),
-        #     lr=LR,
-        #     field=field,
-        #     scale=SCALE,
-        #     init=INIT,
-        #     noise=NOISE,
-        #     device_variability=DEVICE_VARIABILITY,
-        #     clipping=CLIPPING,
-        # )
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
         l, acc, grad = training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist,
                                 test_mnist, dnn, EPOCHS, optim, pbar, switch=switch, time_switch=TIME_SWITCH)
         print(f"Accuracy: {acc[-1]*100: .2f} %, Loss: {l.item(): .4f}")
-        # SAVE THE SIMULATION
-        # Save the simulation parameters in a dict
-        simulation_parameters = {
-            "task": TASK,
-            "seed": SEED,
-            "padding": PADDING,
-            "batch_size": BATCH_SIZE,
-            "layers": LAYERS,
-            "epochs": EPOCHS,
-            "input_scale": INPUT_SCALE,
-            "output_scale": OUTPUT_SCALE,
-            "voltage_noise": VOLTAGE_NOISE,
-            "resistor_noise": RESISTOR_NOISE,
-            "time_switch": TIME_SWITCH,
-            "optimizer": optim.__class__.__name__,
-            "optimizer_parameters": {
-                "lr": LR,
-                "field": FIELD,
-                "scale": SCALE,
-                "init": INIT,
-                "device_variability": DEVICE_VARIABILITY,
-                "clipping": CLIPPING,
-            },
-            "criterion": LOSS.__class__.__name__,
-            "loss": l.item(),
-            "accuracy": acc[-1].item()*100,
-        }
-        # Save the simulation parameters in a json file
-        filename = f"{simulation_id}-{i}.json"
+
+        ##############################
         os.makedirs(folder_path, exist_ok=True)
-        with open(os.path.join(folder_path, filename), 'w') as f:
-            json.dump(simulation_parameters, f, indent=4)
         # Save the model
         model_filename = f"{simulation_id}-{i}.pth"
         torch.save(dnn.state_dict(), os.path.join(folder_path, model_filename))
@@ -241,4 +194,52 @@ if __name__ == "__main__":
         # Save the gradients
         grad_filename = f"{simulation_id}-{i}-gradients.pth"
         torch.save(grad, os.path.join(folder_path, grad_filename))
+        params = list(dnn.parameters())
+        for k in range(0, len(params), 2):
+            x1 = f_inv(params[k].data)
+            x2 = f_inv(params[k+1].data)
+            f_exponential = set_field("double-exponential" if field ==
+                                      "double-linear" else "double-linear")[0]
+            params[k].data = f_exponential(x1)
+            params[k+1].data = f_exponential(x2)
+
+        bandwidth_linear = f(torch.tensor(0)).to(
+            device=DEVICE) - f(torch.tensor(27)).to(device=DEVICE)
+        bandwidth_exp = f_exponential(
+            torch.tensor(0)).to(device=DEVICE) - f_exponential(torch.tensor(27)).to(device=DEVICE)
+        ratio = bandwidth_linear / \
+            bandwidth_exp if field == "double-linear" else bandwidth_exp/bandwidth_linear
+        dnn.set_input_scale(dnn.input_scale*ratio)
+
+        swap_eval_acc = evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn)
+        # Save the simulation parameters in a dict
+        simulation_parameters = {
+            "task": TASK,
+            "seed": SEED,
+            "padding": PADDING,
+            "batch_size": BATCH_SIZE,
+            "layers": LAYERS,
+            "epochs": EPOCHS,
+            "input_scale": INPUT_SCALE,
+            "voltage_noise": VOLTAGE_NOISE,
+            "resistor_noise": RESISTOR_NOISE,
+            "time_switch": TIME_SWITCH,
+            "init": INIT,
+            "optimizer": optim.__class__.__name__,
+            "optimizer_parameters": {
+                "lr": LR,
+                "field": FIELD,
+                "scale": SCALE,
+                "device_variability": DEVICE_VARIABILITY,
+                "clipping": CLIPPING,
+            },
+            "criterion": LOSS.__class__.__name__,
+            "loss": l.item(),
+            "accuracy": acc[-1].item()*100,
+            "swap_accuracy": swap_eval_acc*100,
+        }
+        # Save the simulation parameters in a json file
+        filename = f"{simulation_id}-{i}.json"
+        with open(os.path.join(folder_path, filename), 'w') as f:
+            json.dump(simulation_parameters, f, indent=4)
     print(f"Simulation saved in {folder_path}")

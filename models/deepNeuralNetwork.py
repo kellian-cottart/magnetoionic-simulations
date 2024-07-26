@@ -36,7 +36,6 @@ class DNN(torch.nn.Module):
                  momentum: float = 0.15,
                  activation_function: str = "relu",
                  input_scale: float = 0.001,
-                 output_scale: float = 1000,
                  *args,
                  **kwargs):
         super(DNN, self).__init__()
@@ -50,7 +49,6 @@ class DNN(torch.nn.Module):
         self.affine = affine
         self.activation_function = activation_function
         self.input_scale = input_scale
-        self.output_scale = output_scale
         if "activation_parameters" in kwargs:
             self.activation_parameters = kwargs["activation_parameters"]
         ### LAYER INITIALIZATION ###
@@ -94,7 +92,7 @@ class DNN(torch.nn.Module):
             if isinstance(layer, torch.nn.Linear):
                 current = x*self.input_scale
                 voltage = layer(current)
-                x = voltage*self.output_scale
+                x = voltage
             else:
                 x = layer(x)
         return x

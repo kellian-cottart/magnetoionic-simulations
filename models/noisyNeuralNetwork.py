@@ -23,6 +23,8 @@ class NNN(torch.nn.Module):
     """
 
     def __init__(self,
+                 f: callable,
+                 f_inv: callable,
                  layers: list = [1024, 1024],
                  init: str = "uniform",
                  std: float = 0.01,
@@ -36,8 +38,6 @@ class NNN(torch.nn.Module):
                  momentum: float = 0.15,
                  activation_function: str = "relu",
                  input_scale: float = 0.001,
-                 output_scale: float = 1000,
-                 field="double-linear",
                  resistor_noise=0.0,
                  voltage_noise=0.0,
                  * args,
@@ -53,16 +53,23 @@ class NNN(torch.nn.Module):
         self.affine = affine
         self.activation_function = activation_function
         self.input_scale = input_scale
-        self.output_scale = output_scale
-        self.field = field
         self.resistor_noise = resistor_noise
         self.voltage_noise = voltage_noise
+        self.f = f
+        self.f_inv = f_inv
+
         if "activation_parameters" in kwargs:
             self.activation_parameters = kwargs["activation_parameters"]
         ### LAYER INITIALIZATION ###
         self._layer_init(layers, bias)
         ### WEIGHT INITIALIZATION ###
         self._weight_init(init, std)
+
+    def set_input_scale(self, input_scale):
+        self.input_scale = input_scale
+        for layer in self.layers:
+            if isinstance(layer, NoisyDoubleLinear):
+                layer.input_scale = input_scale
 
     def _layer_init(self, layers, bias=False):
         """ Initialize layers of NN
@@ -79,11 +86,11 @@ class NNN(torch.nn.Module):
             self.layers.append(NoisyDoubleLinear(
                 layers[i],
                 layers[i+1],
-                field=self.field,
+                f=self.f,
+                f_inv=self.f_inv,
                 resistor_noise=self.resistor_noise,
                 voltage_noise=self.voltage_noise,
                 input_scale=self.input_scale,
-                output_scale=self.output_scale,
                 device=self.device))
             self.layers.append(self._norm_init(layers[i+1]))
             if i < len(layers)-2:

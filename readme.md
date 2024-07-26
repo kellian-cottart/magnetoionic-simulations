@@ -7,10 +7,11 @@ To run the project, the required packages are:
 - Python >= 3.9.18
 - Pytorch >= 2.0
 - Torchvision
-- Matplotlib
 - Cuda >= 12.0
 - idx2numpy
 - tqdm
+- Matplotlib (plotting only)
+- Pandas (plotting only)
 
 A conda environment is provided in the `environment.yml` file. To install the environment `machine-learning-env`, run:
 

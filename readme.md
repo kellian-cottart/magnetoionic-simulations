@@ -216,7 +216,6 @@ python main.py --lr 4000 --field double-exponential --task MNIST --var 0 --resis
 python main.py --lr 5000 --field double-exponential --task MNIST --var 0 --resistor_noise 0.0015 --clipping 0' &> figure5.txt &
 ```
 
-
 ## Authors
 
 - Guillaume BERNARD (C2N/CNRS)

@@ -9,7 +9,7 @@ dependencies:
   - pytorch-cuda=12.1
   - matplotlib
   - torchvision=0.16.0=py39_cu121
-  - pandas
+  - pandas=2.1.3
   - pip
   - pip:
       - idx2numpy

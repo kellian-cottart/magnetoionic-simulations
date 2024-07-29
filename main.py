@@ -41,6 +41,8 @@ parser.add_argument('--clipping', type=float, default=0,
                     help='Clipping value for the gradients (lower bound)')
 parser.add_argument('--resistor_noise', type=float, default=0,
                     help='Gaussian noise standard deviation to add to the resistor values')
+parser.add_argument('--compute_intermediate', action='store_true', type=bool, default=False,
+                    help='Compute the intensity and voltage for each layer')
 
 args = parser.parse_args()
 
@@ -60,6 +62,8 @@ INPUT_SCALE = args.input_scale  # Scale of the input values
 RESISTOR_NOISE = args.resistor_noise
 # Gaussian noise standard deviation to add to the voltage values
 VOLTAGE_NOISE = RESISTOR_NOISE*1e-4
+# Compute the intensity and voltage for each layer
+COMPUTE_INTERMEDIATE = args.compute_intermediate
 # Gaussian noise standard deviation to change the slope of the functions
 DEVICE_VARIABILITY = args.var
 CLIPPING = args.clipping  # Clipping value for the gradients (lower bound)
@@ -194,6 +198,23 @@ if __name__ == "__main__":
         # Save the gradients
         grad_filename = f"{simulation_id}-{i}-gradients.pth"
         torch.save(grad, os.path.join(folder_path, grad_filename))
+        # COMPUTE INTENSITY AND VOLTAGE USING ONE TEST IMAGE
+        if COMPUTE_INTERMEDIATE:
+            test_image = test_mnist[0][0].unsqueeze(0).to(DEVICE)
+            # forward pass
+            dnn.eval()
+            output, intensity, voltage = dnn.forward_with_intermediate(
+                test_image)
+            for index, intensity_layer, voltage_layer in zip(range(len(intensity)), intensity, voltage):
+                # Save the intensity
+                intensity_filename = f"{simulation_id}-{i}-intensity-layer-{index}.pth"
+                torch.save(intensity_layer, os.path.join(
+                    folder_path, intensity_filename))
+                # Save the voltage
+                voltage_filename = f"{simulation_id}-{i}-voltage-layer-{index}.pth"
+                torch.save(voltage_layer, os.path.join(
+                    folder_path, voltage_filename))
+        # COMPUTE THE FIELD SWAP ACCURACY
         params = list(dnn.parameters())
         for k in range(0, len(params), 2):
             x1 = f_inv(params[k].data)
@@ -210,9 +231,8 @@ if __name__ == "__main__":
         ratio = bandwidth_linear / \
             bandwidth_exp if field == "double-linear" else bandwidth_exp/bandwidth_linear
         dnn.set_input_scale(dnn.input_scale*ratio)
-
         swap_eval_acc = evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn)
-        # Save the simulation parameters in a dict
+        # SAVE THE SIMULATION PARAMETERS
         simulation_parameters = {
             "task": TASK,
             "seed": SEED,

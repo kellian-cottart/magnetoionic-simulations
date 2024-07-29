@@ -44,7 +44,7 @@ class NoisyDoubleLinear(torch.nn.Module):
             intensity, self.weight1, self.weight2, self.resistor_noise)
         voltage_noise = torch.empty_like(voltage).normal_(
             0, self.voltage_noise).to(self.device)
-        return (voltage + voltage_noise)
+        return voltage + voltage_noise
 
     def __repr__(self):
         return f"NoisyDoubleLinear(in_features={self.in_features}, out_features={self.out_features}, resistor_noise={self.resistor_noise}, voltage_noise={self.voltage_noise}, input_scale={self.input_scale}, init={self.init}, device={self.device})"

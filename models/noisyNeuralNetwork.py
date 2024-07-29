@@ -110,6 +110,18 @@ class NNN(torch.nn.Module):
         for layer in self.layers:
             x = layer(x)
         return x
+    
+    def forward_with_intermediate(self, x, *args, **kwargs):
+        ### FORWARD PASS ###
+        intensity = []
+        voltage = []
+        for layer in self.layers:
+            if isinstance(layer, NoisyDoubleLinear):
+                intensity.append(x*self.input_scale)
+            x = layer(x)
+            if isinstance(layer, NoisyDoubleLinear):
+                voltage.append(x)
+        return x, intensity, voltage
 
     def _activation_init(self):
         """

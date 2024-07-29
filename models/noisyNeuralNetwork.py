@@ -6,20 +6,25 @@ class NNN(torch.nn.Module):
     """ Deep Neural Network
 
     Args:
+        f (callable): Forward function for the weights
+        f_inv (callable): Inverse function for the weights
         layers (list): List of layer sizes (including input and output layers)
         init (str): Initialization method for weights
         std (float): Standard deviation for initialization
-        device (str): Device to use for computation (e.g. 'cuda' or 'cpu')
+        device (str): Device to run on
         dropout (bool): Whether to use dropout
-        normalization (str): Normalization method to choose (e.g. 'batchnorm', 'layernorm', 'instancenorm', 'groupnorm')
+        normalization (str): Normalization layer type
         bias (bool): Whether to use bias
-        eps (float): BatchNorm epsilon
-        momentum (float): BatchNorm momentum
-        running_stats (bool): Whether to use running stats in BatchNorm
-        affine (bool): Whether to use affine transformation in BatchNorm
-        gnnum_groups (int): Number of groups in GroupNorm
-        activation_function (torch.nn.functional): Activation function
-        output_function (str): Output function
+        running_stats (bool): Whether to use running stats in normalization layer
+        affine (bool): Whether to use affine transformation in normalization layer
+        eps (float): Epsilon for normalization layer
+        momentum (float): Momentum for normalization layer
+        activation_function (str): Activation function
+        input_scale (float): Input scale
+        resistor_noise (float): Resistor noise
+        voltage_noise (float): Voltage noise
+        *args: Variable length argument list
+        **kwargs: Arbitrary keyword arguments
     """
 
     def __init__(self,
@@ -66,6 +71,11 @@ class NNN(torch.nn.Module):
         self._weight_init(init, std)
 
     def set_input_scale(self, input_scale):
+        """ Set input scale for the forward pass
+
+        Args:
+            input_scale (float): Input scale
+        """
         self.input_scale = input_scale
         for layer in self.layers:
             if isinstance(layer, NoisyDoubleLinear):
@@ -110,8 +120,18 @@ class NNN(torch.nn.Module):
         for layer in self.layers:
             x = layer(x)
         return x
-    
+
     def forward_with_intermediate(self, x, *args, **kwargs):
+        """ Forward pass of DNN with intermediate outputs for the voltage and intensity
+
+        Args:
+            x (torch.Tensor): Input tensor
+
+        Returns:
+            torch.Tensor: Output tensor
+            list: List of input intensities
+            list: List of output voltages
+        """
         ### FORWARD PASS ###
         intensity = []
         voltage = []

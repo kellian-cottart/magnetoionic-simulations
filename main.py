@@ -41,41 +41,45 @@ parser.add_argument('--clipping', type=float, default=0,
                     help='Clipping value for the gradients (lower bound)')
 parser.add_argument('--resistor_noise', type=float, default=0,
                     help='Gaussian noise standard deviation to add to the resistor values')
-parser.add_argument('--compute_intermediate', action='store_true', type=bool, default=False,
+parser.add_argument('--compute_intermediate', action='store_true', default=False,
                     help='Compute the intensity and voltage for each layer')
 
 args = parser.parse_args()
 
-NUMBER_MODELS = args.n_models  # Number of models to train
+NUMBER_MODELS = args.n_models
 PADDING = 2  # Padding for the MNIST dataset - N pixels on each side of the image
-DEVICE = 'cuda:0'  # Device to use for the simulation (GPU or CPU)
-SEED = args.seed  # Seed for the random number generator
-INIT = args.init  # Standard deviation for the initialization of the weights
-BATCH_SIZE = args.batch_size  # Batch size for the training and testing
-EPOCHS = args.epochs  # Number of epochs for the training
-LR = args.lr  # Learning rate for the optimizer
-FIELD = args.field  # Strength of the magnetic field
-DIVISOR = 1  # Divisor for the learning rate
-SCALE = args.scale  # Scale of the functions f_minus and f_plus
-INPUT_SCALE = args.input_scale  # Scale of the input values
-# Gaussian noise standard deviation to add to the resistor values
+DEVICE = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+SEED = args.seed
+INIT = args.init
+BATCH_SIZE = args.batch_size
+CLIPPING = args.clipping
+EPOCHS = args.epochs
+LR = args.lr
+FIELD = args.field
+SCALE = args.scale
+INPUT_SCALE = args.input_scale
 RESISTOR_NOISE = args.resistor_noise
 # Gaussian noise standard deviation to add to the voltage values
 VOLTAGE_NOISE = RESISTOR_NOISE*1e-4
-# Compute the intensity and voltage for each layer
 COMPUTE_INTERMEDIATE = args.compute_intermediate
-# Gaussian noise standard deviation to change the slope of the functions
 DEVICE_VARIABILITY = args.var
-CLIPPING = args.clipping  # Clipping value for the gradients (lower bound)
-# Fraction of the epochs to switch the magnetic field
 TIME_SWITCH = args.time_switch
-TASK = args.task  # Task to perform (MNIST or Fashion)
-LAYERS = args.layers  # Number of neurons in each hidden layer
+TASK = args.task
+LAYERS = args.layers
 LOSS = torch.nn.CrossEntropyLoss()  # Loss function
 FOLDER = "simulations"  # Folder to save the simulations
 
 
 def set_field(field):
+    """Set the functions for the magnetic field
+
+    Args:
+        field (str): Type of magnetic field
+
+    Returns:
+        callable: Forward function for the magnetic field
+        callable: Inverse function for the magnetic field
+    """
     if field == "double-linear":
         def f(x): return -0.021*x + 2.742
         def f_inv(y): return (y - 2.742)/(-0.021)
@@ -86,6 +90,13 @@ def set_field(field):
 
 
 def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs, optim, pbar, switch=None, time_switch=2):
+    """ Training function for the DNN
+
+    Returns:
+        float: Loss of the model
+        torch.Tensor: Accuracy of the model at each epoch
+        torch.Tensor: Mean absolute value of the gradients at each epoch
+    """
     accuracies = torch.zeros(epochs)
     gradients = torch.zeros(epochs)
     for epoch in pbar:
@@ -116,6 +127,11 @@ def training(DEVICE, BATCH_SIZE, LOSS, LR, train_mnist, test_mnist, dnn, epochs,
 
 
 def evaluation(DEVICE, BATCH_SIZE, test_mnist, dnn):
+    """ Evaluation function for the DNN
+
+    Returns:
+        float: Accuracy of the model
+    """
     dnn.eval()
     num_batches = len(test_mnist) // BATCH_SIZE + 1
     acc = 0

@@ -64,11 +64,11 @@ We will run experiments on MNIST dataset using `double-linear` and `double-expon
 ```sh
 nohup sh -c 'python main.py --lr 500 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  && \
 python main.py --lr 1000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  && \
-python main.py --lr 2000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  --compute_intermediate True && \
+python main.py --lr 2000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  --compute_intermediate && \
 python main.py --lr 3000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  && \
 python main.py --lr 4000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1  && \
 python main.py --lr 5000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1 && \
-python main.py --lr 500 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 ---clipping 0.1 && \
+python main.py --lr 500 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1 && \
 python main.py --lr 1000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1 && \
 python main.py --lr 2000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1 && \
 python main.py --lr 3000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0.1 && \
@@ -214,6 +214,23 @@ python main.py --lr 2000 --field double-exponential --task MNIST --var 0 --resis
 python main.py --lr 3000 --field double-exponential --task MNIST --var 0 --resistor_noise 0.0015 --clipping 0 && \
 python main.py --lr 4000 --field double-exponential --task MNIST --var 0 --resistor_noise 0.0015 --clipping 0 && \
 python main.py --lr 5000 --field double-exponential --task MNIST --var 0 --resistor_noise 0.0015 --clipping 0' &> figure5.txt &
+```
+
+### Figure 6 - Physical clipping
+
+```sh
+nohup sh -c 'python main.py --lr 500 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 1000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 2000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping --compute_intermediate && \
+python main.py --lr 3000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 4000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 5000 --field double-linear --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 500 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 1000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 2000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 3000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 4000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping && \
+python main.py --lr 5000 --field double-exponential --task MNIST --var 0.2 --resistor_noise 0.015 --clipping 0 --physical_clipping' &> figure6.txt &
 ```
 
 ## Authors

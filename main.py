@@ -43,7 +43,8 @@ parser.add_argument('--resistor_noise', type=float, default=0,
                     help='Gaussian noise standard deviation to add to the resistor values')
 parser.add_argument('--compute_intermediate', action='store_true', default=False,
                     help='Compute the intensity and voltage for each layer')
-
+parser.add_argument('--physical_clipping', action='store_true', default=False,
+                    help='Use a clipping that is closer to the physical limits')
 args = parser.parse_args()
 
 NUMBER_MODELS = args.n_models
@@ -59,6 +60,7 @@ FIELD = args.field
 SCALE = args.scale
 INPUT_SCALE = args.input_scale
 RESISTOR_NOISE = args.resistor_noise
+PHYSICAL_CLIPPING = args.physical_clipping
 # Gaussian noise standard deviation to add to the voltage values
 VOLTAGE_NOISE = RESISTOR_NOISE*1e-4
 COMPUTE_INTERMEDIATE = args.compute_intermediate
@@ -196,6 +198,7 @@ if __name__ == "__main__":
             clipping=CLIPPING,
             f=f,
             f_inv=f_inv,
+            physical_clipping=PHYSICAL_CLIPPING,
         )
         pbar = tqdm.tqdm(range(EPOCHS))
         # TRAINING
@@ -268,6 +271,7 @@ if __name__ == "__main__":
                 "scale": SCALE,
                 "device_variability": DEVICE_VARIABILITY,
                 "clipping": CLIPPING,
+                "physical_clipping": PHYSICAL_CLIPPING,
             },
             "criterion": LOSS.__class__.__name__,
             "loss": l.item(),

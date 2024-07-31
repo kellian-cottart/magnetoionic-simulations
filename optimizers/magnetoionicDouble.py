@@ -21,7 +21,8 @@ class MagnetoionicDouble(torch.optim.Optimizer):
                  f_inv,
                  lr=1e-3,
                  device_variability=0.2,
-                 clipping=0.1,
+                 clipping=0,
+                 physical_clipping=True,
                  eps=1e-8):
         if not 0.0 <= lr:
             raise ValueError("Invalid learning rate: {}".format(lr))
@@ -32,7 +33,8 @@ class MagnetoionicDouble(torch.optim.Optimizer):
         defaults = dict(lr=lr,
                         eps=eps,
                         device_variability=device_variability,
-                        clipping=clipping)
+                        clipping=clipping,
+                        physical_clipping=physical_clip)
         super(MagnetoionicDouble, self).__init__(params, defaults)
 
     def step(self, closure=None):
@@ -57,6 +59,7 @@ class MagnetoionicDouble(torch.optim.Optimizer):
                 lr = group['lr']
                 variability = group['device_variability']
                 clipping = group["clipping"]
+                physical_clipping = group["physical_clipping"]
                 grad_w1 = w1.grad
                 grad_w2 = w2.grad
                 # State initialization
@@ -77,11 +80,15 @@ class MagnetoionicDouble(torch.optim.Optimizer):
                 # Compute the new value of the weights given a pulse set as the gradient
                 update1 = lr*torch.abs(grad_w1)*state[f'variability_w1_{i}']
                 update2 = lr*torch.abs(grad_w2)*state[f'variability_w2_{i}']
-                # Clip updates
-                update1 = torch.where(update1 < clipping,
-                                      torch.zeros_like(update1), update1)
-                update2 = torch.where(update2 < clipping,
-                                      torch.zeros_like(update2), update2)
+                if physical_clipping == True:
+                    update1 = physical_clip(update1)
+                    update2 = physical_clip(update2)
+                 # Clip updates
+                if clipping > 0:
+                    update1 = torch.where(update1 < clipping,
+                                          torch.zeros_like(update1), update1)
+                    update2 = torch.where(update2 < clipping,
+                                          torch.zeros_like(update2), update2)
                 # Update the weights depending on the sign of the gradient
                 f1 = self.f(x1 + update1)
                 f2 = self.f(x2 + update2)
@@ -97,3 +104,7 @@ class MagnetoionicDouble(torch.optim.Optimizer):
                 w2.data[idx2] = stop - (w1.data[idx2] - start)
                 w1.data[idx2] = start
         return loss
+
+
+def physical_clip(x):
+    return (-torch.exp(-x/0.18) + 1)*x

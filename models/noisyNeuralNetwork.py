@@ -45,6 +45,7 @@ class NNN(torch.nn.Module):
                  input_scale: float = 0.001,
                  resistor_noise=0.0,
                  voltage_noise=0.0,
+                 device_noise=False,
                  * args,
                  **kwargs):
         super(NNN, self).__init__()
@@ -60,6 +61,7 @@ class NNN(torch.nn.Module):
         self.input_scale = input_scale
         self.resistor_noise = resistor_noise
         self.voltage_noise = voltage_noise
+        self.device_noise = device_noise
         self.f = f
         self.f_inv = f_inv
 
@@ -101,6 +103,7 @@ class NNN(torch.nn.Module):
                 resistor_noise=self.resistor_noise,
                 voltage_noise=self.voltage_noise,
                 input_scale=self.input_scale,
+                device_noise=self.device_noise,
                 device=self.device))
             self.layers.append(self._norm_init(layers[i+1]))
             if i < len(layers)-2:

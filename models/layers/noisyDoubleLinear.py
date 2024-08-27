@@ -13,12 +13,14 @@ class NoisyDoubleLinear(torch.nn.Module):
             voltage_noise=0.0,
             input_scale=0.001,
             init=0.01,
+            device_noise=False,
             device="cuda:0"):
         super(NoisyDoubleLinear, self).__init__()
         self.in_features = in_features
         self.out_features = out_features
         self.resistor_noise = resistor_noise
         self.voltage_noise = voltage_noise
+        self.device_noise = device_noise
         self.init = init
         self.device = device
         self.input_scale = input_scale
@@ -41,7 +43,7 @@ class NoisyDoubleLinear(torch.nn.Module):
     def forward(self, x):
         intensity = x * self.input_scale
         voltage = NoisyForward.apply(
-            intensity, self.weight1, self.weight2, self.resistor_noise)
+            intensity, self.weight1, self.weight2, self.resistor_noise, self.device_noise)
         voltage_noise = torch.empty_like(voltage).normal_(
             0, self.voltage_noise).to(self.device)
         return voltage + voltage_noise
@@ -51,12 +53,19 @@ class NoisyDoubleLinear(torch.nn.Module):
 
 
 class NoisyForward(torch.autograd.Function):
-    def forward(ctx, x, weight1, weight2, noise):
+    def forward(ctx, x, weight1, weight2, noise, device_noise=False):
         """Forward pass of the noisy double linear layer
         """
         ctx.save_for_backward(x, weight1, weight2)
         ctx.noise = noise
-        resistor = weight2 - weight1
+        if device_noise == True:
+            noise1 = torch.empty_like(weight1).normal_(
+                0, ctx.noise).to(weight1.device)
+            noise2 = torch.empty_like(weight2).normal_(
+                0, ctx.noise).to(weight2.device)
+            resistor = weight2 - weight1 + noise2 - noise1
+        else:
+            resistor = weight2 - weight1
         intensity = x
         return torch.functional.F.linear(intensity, resistor)
 
@@ -68,8 +77,8 @@ class NoisyForward(torch.autograd.Function):
             0, ctx.noise).to(weight1.device)
         noise2 = torch.empty_like(weight2).normal_(
             0, ctx.noise).to(weight2.device)
-        resistor = (weight2 + noise2) - (weight1 + noise1)
+        resistor = weight2 - weight1 + noise2 - noise1
         grad_input = grad_output @ resistor
         grad_weight1 = -grad_output.T @ x
         grad_weight2 = grad_output.T @ x
-        return grad_input, grad_weight1, grad_weight2, None
+        return grad_input, grad_weight1, grad_weight2, None, None

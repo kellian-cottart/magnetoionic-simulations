@@ -45,6 +45,8 @@ parser.add_argument('--compute_intermediate', action='store_true', default=False
                     help='Compute the intensity and voltage for each layer')
 parser.add_argument('--physical_clipping', action='store_true', default=False,
                     help='Use a clipping that is closer to the physical limits')
+parser.add_argument('--device_noise', action='store_true', default=False,
+                    help='Add noise to the device during the forward pass')
 args = parser.parse_args()
 
 NUMBER_MODELS = args.n_models
@@ -61,6 +63,7 @@ SCALE = args.scale
 INPUT_SCALE = args.input_scale
 RESISTOR_NOISE = args.resistor_noise
 PHYSICAL_CLIPPING = args.physical_clipping
+DEVICE_NOISE = args.device_noise
 # Gaussian noise standard deviation to add to the voltage values
 VOLTAGE_NOISE = RESISTOR_NOISE*1e-4
 COMPUTE_INTERMEDIATE = args.compute_intermediate
@@ -189,6 +192,7 @@ if __name__ == "__main__":
             voltage_noise=VOLTAGE_NOISE,
             f=f,
             f_inv=f_inv,
+            device_noise=DEVICE_NOISE,
         )
         parameters = list(dnn.parameters())
         optim = MagnetoionicDouble(
